@@ -1,0 +1,234 @@
+\documentclass[a4paper,12pt]{article}
+\usepackage[T2A]{fontenc}
+\usepackage[cp1251]{inputenc}
+\usepackage[russian]{babel}
+\usepackage{indentfirst}
+\usepackage{amsthm}
+\usepackage{amsmath}
+\usepackage{mathtools}
+\usepackage{upgreek}
+\usepackage{amsfonts}
+\usepackage{amssymb}
+\usepackage{hyperref}
+\usepackage{float}
+\usepackage{mathrsfs}
+
+\usepackage{algorithm}
+\usepackage{algpseudocode}
+ 
+% Добавляем свои блоки
+ 
+\makeatletter
+\algblock[ALGORITHMBLOCK]{BeginAlgorithm}{EndAlgorithm}
+\algblock[BLOCK]{BeginBlock}{EndBlock}
+\makeatother
+ 
+% Нумерация блоков
+ 
+\usepackage{caption}% http://ctan.org/pkg/caption
+\captionsetup[ruled]{labelsep=period}
+\makeatletter
+\@addtoreset{algorithm}{chapter}% algorithm counter resets every chapter
+\makeatother
+\renewcommand{\thealgorithm}{\thechapter.\arabic{algorithm}}% Algorithm # is <chapter>.<algorithm>
+
+
+ \voffset -24.5mm
+ \hoffset -5mm
+ \textwidth 173mm
+ \textheight 240mm
+ \oddsidemargin=0mm \evensidemargin=0mm
+ \linespread{1.5}
+
+\title{Вычислительные аспекты оптимизации\\ Метод стохастического градиента}
+
+\author{Пимахов Кирилл, 622 гр.}
+\date{2017}
+\begin{document}
+
+	% Перевод данных об алгоритмах
+	\renewcommand{\listalgorithmname}{Список алгоритмов}
+	\floatname{algorithm}{Алгоритм}
+	
+	% Перевод команд псевдокода
+	\algrenewcommand\algorithmicwhile{\textbf{До тех пока}}
+	\algrenewcommand\algorithmicdo{\textbf{выполнять}}
+	\algrenewcommand\algorithmicrepeat{\textbf{Повторять}}
+	\algrenewcommand\algorithmicuntil{\textbf{Пока выполняется}}
+	\algrenewcommand\algorithmicend{\textbf{Конец}}
+	\algrenewcommand\algorithmicif{\textbf{Если}}
+	\algrenewcommand\algorithmicelse{\textbf{иначе}}
+	\algrenewcommand\algorithmicthen{\textbf{тогда}}
+	\algrenewcommand\algorithmicfor{\textbf{Цикл}}
+	\algrenewcommand\algorithmicforall{\textbf{Выполнить для всех}}
+	\algrenewcommand\algorithmicfunction{\textbf{Функция}}
+	\algrenewcommand\algorithmicprocedure{\textbf{Процедура}}
+	\algrenewcommand\algorithmicloop{\textbf{Зациклить}}
+	\algrenewcommand\algorithmicrequire{\textbf{Условия:}}
+	\algrenewcommand\algorithmicensure{\textbf{Обеспечивающие условия:}}
+	\algrenewcommand\algorithmicreturn{\textbf{Возвратить}}
+	\algrenewtext{EndWhile}{\textbf{Конец цикла}}
+	\algrenewtext{EndLoop}{\textbf{Конец зацикливания}}
+	\algrenewtext{EndFor}{\textbf{Конец цикла}}
+	\algrenewtext{EndFunction}{\textbf{Конец функции}}
+	\algrenewtext{EndProcedure}{\textbf{Конец процедуры}}
+	\algrenewtext{EndIf}{\textbf{Конец условия}}
+	\algrenewtext{EndFor}{\textbf{Конец цикла}}
+	\algrenewtext{BeginAlgorithm}{\textbf{Начало алгоритма}}
+	\algrenewtext{EndAlgorithm}{\textbf{Конец алгоритма}}
+	\algrenewtext{BeginBlock}{\textbf{Начало блока. }}
+	\algrenewtext{EndBlock}{\textbf{Конец блока}}
+	\algrenewtext{ElsIf}{\textbf{иначе если }}
+
+\maketitle
+\newpage
+\tableofcontents
+\newpage
+
+\section{Постановка задачи}
+Пусть имеется матрица данных $\mathbf{X}=[x_1,\ldots,x_p], \, x_j \in \mathbb{R}^n, j=1 \ldots p$,  где $p$ -- количество переменных, $n$ -- количество наблюдений. Целевая переменная $y \in \mathbb{R}^n$ в случае регрессии,   $y_i \in \{-1,+1\}, \, i=1 \ldots n$ в случае классификации.
+
+Задача в случае регрессии: найти параметры $w$ семейства функций $f(x,w)$, минимизирующие
+  \begin{gather}
+  \label{eqn:reg_obj}
+  	\frac{1}{n}\sum_{i=1}^n\mathscr{L}(f(x_i,w)-y_i)=\frac{1}{n}Q(w),
+  \end{gather}
+  где $\mathscr{L}$ -- функция потерь.
+  
+  Например, в этих обозначениях записывается линейная регрессия: $w=(\beta_0, \beta_1, \ldots, \beta_p)$, $f(x_i,w)=\sum_{j=1}^p x_{ij}*\beta_j + \beta_0$, $\mathscr{L}(f(x_i,w)-y)=(f(x_i,w)-y)^2$. Так же к минимизации \eqref{eqn:reg_obj} сводится и любая параметрическая регрессия.
+  
+  В случае классификации так же задача заключается нахлждении параметров $w$ семейства функций $g(x,w)$, минимизирующие следующую целевую функцию:
+	\begin{gather}
+		\label{eqn:klas_obj}
+		\frac{1}{n}\sum_{i=1}^n\mathscr{L}(g(x_i,w)y_i)=\frac{1}{n}\sum_{i=1}^n[g(x_i,w)y_i<0]=\frac{1}{n}Q(w).
+	\end{gather}
+	
+	Обозначим $M_i(w) = g(x_i,w)y_i$ -- отступ.
+	
+	Вместо $\mathscr{L}(g(x_i,w)y_i)$ можно брать гладкую (или непрерыаную) оценку сверху, в том числе за счет оценки  $[M_i(w)<0]$. Вспомним постановку задачи в SVM:
+	\begin{gather}
+	\label{eqn:svm_obj}
+		\sum_{i=1}^n(1-M_i(w))_+ + \frac{1}{2C}\|w\|^2 \rightarrow \min_w,
+	\end{gather}
+	где $M_i=y_i \left( \langle w,x_i \rangle -w_0 \right)$.
+Замена целевой функции на мажоранту меняет смысл задачи.  В \eqref{eqn:svm_obj} штрафуются близкие к разделяющей гиперплоскости наблюдения, а также введена регуляризация.
+
+%В логистической регрессии  оценкой $[M_i(w)<0]$ является $\log(1+e^{-y_i \beta^{\rm T} x_i })$ в случае, когда совместное распределение $y_i \in \{-1,+1\}$, $x_i \in \mathbb{R}^n$ удовлетворяет
+%\begin{gather}
+%\label{eqn:log_regr_model}
+%	\log\frac{P(y=1 \mid x)}{P(y=-1 \mid x)} = w^{\rm T}x.
+%\end{gather}
+%Для удобства считаем, что свободный член уже включен в матрицу данных. Тогда учитывая \eqref{eqn:log_regr_model} и то, что вероятности в числителе и знаменателе в сумме дают единицу, получаем:
+%\begin{gather*}
+%	P(y=1 \mid x)=\frac{e^{w^{\rm T}x}}{1+e^{w^{\rm T}x}}, \\
+%	P(y=-1 \mid x)=\frac{1}{1+e^{w^{\rm T}x}}.
+%\end{gather*}
+
+ \newpage
+\section{Метод стохастического градиента}
+Один из простейших методов решения задачи минимизации $Q(w)$ , определенной в \eqref{eqn:reg_obj} или в \eqref{eqn:klas_obj} -- градиентный спуск.
+
+\begin{algorithm}
+	\caption{Градиентный спуск}\label{alg:grad_des}
+	\begin{algorithmic}[1]
+		\State Инициализация параметров $w^{(0)}$ и выбор скорости обучения $h$.
+		\Repeat{}
+			\State Вычисление градиента $Q$ при текущем векторе параметров. $$\nabla Q(w^{(t)})=\left( \frac{\partial Q(w^{(t)})}{\partial w_1}, \ldots, \frac{\partial Q(w^{(t)})}{\partial w_p}  \right)$$.
+			\State Обновление вектора параметров $w^{(t+1)}=w^{(t)}-h\nabla Q(w^{(t)})$.
+		\Until{$|Q(w^{(t+1)})-Q(w^{(t)})|>\epsilon$ или $\|w^{(t+1)}-w^{(t)}\|>\epsilon$ или $\|\nabla Q(w^{(t)})\|>\epsilon$}.
+	\end{algorithmic}
+\end{algorithm}
+
+Условие остановки алгоритма \ref{alg:grad_des} в 5 пункте выбирается в зависимости от постановки задачи.
+
+Проблемой применения алгоритма \ref{alg:grad_des} для задач \eqref{eqn:reg_obj} и \eqref{eqn:klas_obj} является то, что минимизируемая функция представляет собой сумму слагаемых $\mathcal{L}$, количество которых равно объему выборки. При больших объемах выборки вычисление $Q(w)$ и $\nabla Q(w)$ становится трудоемким.
+
+Метод стохастического градиента решает эту проблему. Идея заключается в использовании оценок целевой функции и ее градиента вместо их прямого вычисления
+
+\begin{algorithm}
+	\caption{Метод стохастического градиента}\label{alg:stoch_grad}
+	\begin{algorithmic}[1]
+		\State Инициализация вектора параметров $w^{(0)}$, выбор скорости обучения $h$, темп забывания $\lambda$, вычисление начального значения функционала 
+		$$\overline{Q}(w_0)=\frac{1}{n} Q(w_0)=\frac{1}{n} \sum_{i=1}^n \mathscr{L}(g(x_i,w_0),y_i).$$
+		\Repeat{}
+			\State Случайный выбор элемента из выборки $x_i$ и вычисление функции потерь $$\epsilon_i=\mathscr{L}(g(x_i,w),y_i)$$.
+			\State Обновление вектора параметров $w^{(t+1)}=w^{(t)}-h \nabla \mathscr{L}(g(x_i,w^{(t)}),y_i)$.			
+			\State Оценка функционала $Q(w)=(1-\lambda)Q(w)+\lambda \epsilon_i$.           			
+		\Until{$|Q(w^{(t+1)})-Q(w^{(t)})|>\epsilon$ или $\|w^{(t+1)}-w^{(t)}\|>\epsilon$ или $\|\nabla Q(w^{(t)})\|>\epsilon$}.
+	\end{algorithmic}
+\end{algorithm}
+
+\newpage
+\section{Сходимость метода стохастического градиента}
+Что касается сходимости алгоритма \ref{alg:stoch_grad}, следует учитывать, что оценки параметров $w$ -- случайные величины, поэтому под сходимостью понимается сходимость почти всюду. В (Stochastic learning, L\'eon Bottou, 2003) приводятся условия, при которых стохастический градиент сходится почти всюду при 
+\begin{gather}
+\label{eqn:cond_converg}
+h_t\rightarrow 0, \, \sum_{t=1}^{\infty}h_t = \infty, \, \sum_{t=1}^{\infty}h_t^2 < \infty.
+\end{gather}
+Более сильным, но простым является условие строгой выпуклости целевой функции. Выпуклой, например, является целевая функция для линейной регрессии: гессиан  в этом случае равен $\mathbf{X}^{\rm T} \mathbf{X}$, и если он положительно определен, то задача строго выпукла.
+
+
+Также в (Stochastic learning, L\'eon Bottou, 2003) по поводу скорости сходимости утверждается, что  $1/\|w_t-w^*\|^2$ растет линейно по $t$.
+Использование второй производной (гессиана) целевой функции ускоряет сходимость. Обозначим $\Phi^{(t)}$ -- оценку обратной матрицы к гессиану на шаге $t$, тогда обновление параметров:
+\begin{gather}
+	w^{(t+1)}=w^{(t)}-h \Phi^{(t)} \nabla \mathscr{L}(g(x_i,w^{(t)}),y_i).
+\end{gather}
+
+Вместо $\nabla \mathscr{L}(g(x_i,w),y_i)$ можно использовать более точную оценку градиента: 
+$$
+	1/M \sum_{j=1}^{M} \mathscr{L}(g(x_j,w),y_i).
+$$ В случае достаточно точной оценки градиента, имеет смысл выбирать $h$, обеспечивающую скорейший спуск:
+$$
+	Q(w-h \nabla Q(w))\rightarrow \min_h.
+$$
+
+\section{Инициализация параметров}
+Несколько вариантов инициализации $w^{(0)}$.
+\begin{itemize}
+		\item $w_j^{(0)}=0, \, j=1\ldots p$.
+		\item Небольшие случайные значения $w_j^{(0)} \in U(-1/(2n),1/(2n))$.
+		\item Для регрессии:  $w_j^{(0)}=\langle y, x_j \rangle/\langle x_j, x_j \rangle$.
+		\item Для классификации: $w_j^{(0)}=\log\left( \sum_i [y_i=1] x_{ij}/\sum_i [y_i=-1] x_{ij}\right)$.
+		\item Обучение по небольшой случайной подвыборке. Как и в предыдущих 2 пунктах ожидается, что начальные параметры окажутся достаточно близко к оптимальным.
+		\item Мультистарт. Многократный запуск на случайных начальных значениях $w_j^{(0)}$ и выбор наилучшего. Помогает решить проблему выбора параметров из локального минимума.
+	\end{itemize}
+	
+	Скорость обучения можно инициализировать, например, $h_t = 1/t$, это удовлетворяет условию сходимости метода \eqref{eqn:cond_converg}. В качестве темпа забывания $\lambda$ можно взять $1/n$, где $n$--объем выборки.
+	
+\section{Предъявление объектов}
+Несколько вариантов предъявления объектов, помимо выборки из выборочного распределения:
+	\begin{itemize}
+		\item Попеременно брать наблюдения из разных классов (shuffling).
+		\item Чаще брать наблюдения с большей ошибкой (отступом), например, вероятность предъявления задать пропорционально величине ошибки. Не стоит использовать, если в выборке есть выбросы.
+		\item Не брать <<хорошие>> наблюдения большим положительным отступом $M_i$, то есть такие, что $M_i>\mu_+>0$.
+		\item Не брать выбросы, наблюдения с большим отрицательным отступом: $M_i<\mu_-<0$.
+	\end{itemize}
+	
+\section{Проблема переобучения}
+Несмотря на то, что проблема переобучения -- это, в основном, проблема неправильного выбора модели (например слишком много параметров), недостаточного объема выборки или избыточного числа переменных, с этим можно бороться на этапе оптимизации. При избыточном количестве параметров или при малом объеме выборки, оценки этих параметров неустойчивы, а значит могут принимать большие значения. С помощью регуляризации можно напрямую бороться с этой проблемой. Введем дополнительное слагаемое $L_2$ норму вектора параметров:
+\begin{gather*}
+	Q_{\tau}(w)=Q(w)+\frac{\tau}{2}\|w\|_2^2,
+\end{gather*}
+где $\tau$ -- параметр регуляризации.
+
+Для градиентного метода это значит, что на каждом шаге мы двигаем вектор параметров к нулю:
+\begin{gather*}
+	w^{(t+1)}=(1-h \tau)w^{(t)}-h \nabla \mathscr{L}(g(x_i,w^{(t)}),y_i).
+\end{gather*}
+
+\section{Некоторые модификации метода стохастического градиента}
+\begin{itemize}
+	\item Momentum: Изменение вектора параметров $\Delta w^{(t+1)}=-h \nabla Q(w^{(t)})+\alpha \Delta w^{(t)} $. То есть параметры двигаются как бы с инерцией, чем больше $\alpha$ -- тем больше инерция.
+	\item Nesterov Accelerated Gradient: $\Delta w^{(t+1)}=-h \nabla Q(w^{(t)}+\alpha \Delta w^{(t)})+\alpha \Delta w^{(t)}$. Здесь мы считаем градиент в той точке, куда бы мы двинулись по инерции, то есть заглядываем вперед. Если целевая функция впереди уменьшается быстрее, то и параметр будет двигаться к минимуму быстрее.
+	
+	\item AdaGrad: Идея: сильнее менять параметры, которые меняются редко. На каждом шаге пересчитывается вектор накопленных изменений параметров $G^{(t)}=G^{(t-1)}+\left(\nabla Q(w^{(t-1)})\right)^2$, квадрат вектора поэлементный. Изменение вектора параметров $\Delta w^{(t+1)}=-h/\sqrt{G^{(t)}+\epsilon} \, \nabla Q(w^{(t)})$, здесь операции над векторами поэлементные. Параметр $\epsilon$ для отделения знаменателя от нуля.
+\end{itemize}
+
+\end{document}
+
+
+
+
+
+
+

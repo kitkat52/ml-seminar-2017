@@ -1,0 +1,340 @@
+---
+title: "Нейронные сети для изображений"
+author: "Kirill Pimakhov"
+date: '19 ноября 2017 г '
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(mxnet)
+```
+
+
+```{r, include=FALSE}
+data <- data.matrix(read.csv("D://Документы//Научная и компьютерная коммуникация в современных условиях - I//Нейронные сети для изображений//MNIST//train.csv", header=T))
+set.seed(0)
+idx<-sample(1:nrow(data),10000,replace = FALSE)
+train.idx<-idx[1:5000]
+test.idx<-idx[5001:10000]
+dtrain<-data[train.idx,]
+dtest<-data[test.idx,]
+rm(data)
+gc()
+```
+
+#Данные
+
+Подвыборка известного датасета MNIST. Черно-белые изображения рукописных цифр 28*28=784. Значения 0..255, чем больше -- тем светлее.
+```{r}
+dim(dtrain)
+dim(dtest)
+```
+
+```{r}
+plotTrain <- function(images){
+  op <- par(no.readonly=TRUE)
+  x <- ceiling(sqrt(length(images)))
+  par(mfrow=c(x, x), mar=c(.1, .1, .1, .1))
+  
+  for (i in images){ #reverse and transpose each matrix to rotate images
+    m <- matrix(dtrain[i,-1], nrow=28, byrow=TRUE)
+    m <- apply(m, 2, rev)
+    image(t(m), col=grey.colors(255), axes=FALSE)
+    text(0.05, 0.2, col="white", cex=1.2, dtrain[i, 1])
+  }
+  par(op)
+}
+
+plotTrain(1:36)
+```
+
+#Сверточная нейронная сеть
+
+Сначала каждое изображение должно быть предсталено в виде 3-мерного массива.
+```{r}
+dtrain.x <- dtrain[,-1]
+dtrain.y <- dtrain[,1]
+dtrain.x <- t(dtrain.x/255)
+
+dtrain.array <- dtrain.x
+dim(dtrain.array) <- c(28, 28, 1, ncol(dtrain.x))
+
+dtest.x <- dtest[,-1]
+dtest.y <- dtest[,1]
+dtest.x <- t(dtest.x/255)
+
+dtest.array <- dtest.x
+dim(dtest.array) <- c(28, 28, 1, ncol(dtest.x))
+```
+
+Строим архитектуру нейронной сети с помощью символов. Вводим символьную переменную, над которой будут проводиться манипуляции:
+```{r}
+m1.data <- mx.symbol.Variable("data")
+```
+
+Опрделяем сверточный слой. 
+
+Некоторые параметры:
+
+kernel -- размер ядра (h, w).
+
+stride -- величина сдвига окна (h, w).
+
+dilate -- расстояние между пикселями в окне (h, w).
+
+pad -- размер "подушки из нулей" вокруг входного слоя (h, w).	
+
+num.filter	-- количество сверток.
+
+no.bias -- исключение свободного члена.
+
+```{r}
+m1.conv1 <- mx.symbol.Convolution(m1.data, kernel=c(5,5), num_filter=16)
+```
+
+Батч-нормализация.
+
+momentum -- параметр скользящего среднего, при котором пересчитываются средние. default=0.9
+```{r}
+m1.bn1 <- mx.symbol.BatchNorm(m1.conv1)
+```
+
+Активация нейронов.
+
+act.type -- 'relu', 'sigmoid', 'softrelu', 'tanh'.
+```{r}
+m1.act1 <- mx.symbol.Activation(m1.bn1, act_type="relu")
+```
+
+Пулинг (subsampling).
+
+Параметры: 
+
+kernel, stride, pad -- как в Convolution.
+
+pool.type -- 'avg', 'max', 'sum'.
+```{r}
+m1.pool1 <- mx.symbol.Pooling(m1.act1, pool_type="max", kernel=c(2,2), stride=c(2,2))
+```
+
+Дропаут. Узел слоя будет обнулен с вероятностью $p$ на время эпохи.
+```{r}
+m1.drop1 <- mx.symbol.Dropout(m1.pool1, p=0.5)
+```
+
+
+Добавляем еще несколько слоев.
+```{r}
+m1.conv2 <- mx.symbol.Convolution(m1.drop1, kernel=c(3,3), num_filter=32)
+m1.bn2 <- mx.symbol.BatchNorm(m1.conv2)
+m1.act2 <- mx.symbol.Activation(m1.bn2, act_type="relu")
+m1.pool2 <- mx.symbol.Pooling(m1.act2, pool_type="max", kernel=c(2,2), stride=c(2,2))
+m1.drop2 <- mx.symbol.Dropout(m1.pool2, p=0.5)
+```
+
+Вытягивание изображения в вектор для подачи на вход полновсязным слоям.
+```{r}
+m1.flatten <- mx.symbol.Flatten(m1.drop2)
+```
+
+Параметры полносвязного слоя:
+
+num.hidden -- количество нейронов на слое.
+
+no.bias -- исключение свободного члена.
+```{r}
+m1.fc1 <- mx.symbol.FullyConnected(m1.flatten, num_hidden=256)
+m1.act3 <- mx.symbol.Activation(m1.fc1, act_type="relu")
+```
+
+Выходной слой.
+```{r}
+m1.fc2 <- mx.symbol.FullyConnected(m1.act3, num_hidden=10)
+```
+
+Применение softmax функции к выходу предыдущего слоя. В этом случае минимизируется кросс-энтропия: $E=-\sum_j y_j\log o_j$, где $y_j$ -- правильный ответ, а $o_j$ -- вероятности, полученные на выходе softmax функции. В нашем случае при при одном $j=j_0$ $y_j=1$ , а при остальных $j \neq j_0$ $y_j=0$.
+```{r}
+m1.softmax <- mx.symbol.SoftmaxOutput(m1.fc2)
+```
+
+Визуализация архитектуры нейронной сети.
+```{r, fig.height=20,fig.width=10}
+graph.viz(m1.softmax)
+```
+
+Обучаем модель. Параметры mx.model.FeedForward.create:
+
+learning.rate -- $\eta$,
+
+momentum -- $\alpha$,
+
+wd -- weight decay $\lambda$.
+
+Изменение вектора весов:
+
+$$\Delta w_i(t+1)=-\eta \frac{\partial Q}{\partial w_i} + \alpha \Delta w_i(t) - \lambda \eta w_i,$$
+где $Q$ -- функция потерь, $t$ -- номер шага. По умолчанию используется SGD.
+
+Справка в R по пакету довольно скудная, более подробное описание этой функции можно найти здесь: https://mxnet.incubator.apache.org/api/python/optimization.html, несмотря на то, что это API для Python, это сильно проясняет как работает функция.
+
+```{r}
+log <- mx.metric.logger$new() 
+tick <- proc.time() 
+mx.set.seed(0)
+
+m1 <- mx.model.FeedForward.create(m1.softmax, 
+                                  X = dtrain.array, 
+                                  y = dtrain.y,
+                                  num.round = 20, 
+                                  array.batch.size = 100,
+                                  array.layout="colmajor",
+                                  learning.rate = 0.05,
+                                  momentum = 0.91,
+                                  wd = 0.00001,
+                                  eval.data=list(data=dtest.array, label=dtest.y),
+                                  eval.metric = mx.metric.accuracy,
+                                  initializer = mx.init.uniform(0.07),
+                                  epoch.end.callback = mx.callback.log.train.metric(1, log)
+)
+
+
+print(paste("Training took:", round((proc.time() - tick)[3],2),"seconds"))
+```
+
+#Сравнение с полносвязной архитектурой.
+Поскольку обучение, выбор архитектуры и гиперпараметров трудоемки, я приведу в качестве примеров попытки других людей использовать различные архитектуры. Все примеры с тем же датасетом -- MNIST.
+
+##Полносвязная архитектура
+
+Взято отсюда: https://mxnet.incubator.apache.org/tutorials/python/mnist.html
+Заявленная точность на тестовой выборке 96%.
+
+```{r}
+# input
+data <- mx.symbol.Variable('data')
+
+# The first fully-connected layer and the corresponding activation function
+fc1  = mx.symbol.FullyConnected(data, num_hidden=128)
+act1 = mx.symbol.Activation(fc1, act_type="relu")
+
+# The second fully-connected layer and the corresponding activation function
+fc2  = mx.symbol.FullyConnected(act1, num_hidden = 64)
+act2 = mx.symbol.Activation(fc2, act_type="relu")
+
+# MNIST has 10 classes
+fc3  = mx.symbol.FullyConnected(act2, num_hidden=10)
+# Softmax with cross entropy loss
+mlp  = mx.symbol.SoftmaxOutput(fc3)
+```
+
+```{r, fig.height=20,fig.width=10}
+graph.viz(mlp)
+```
+
+##Сверточная нейронная сеть
+
+Взято отсюда: https://www.kaggle.com/srlmayor/easy-neural-network-in-r-for-0-994
+Заявленная точность на тестовой выборке 99.414%.
+
+```{r}
+m2.data <- mx.symbol.Variable("data")
+
+# 1st convolutional layer
+m2.conv1 <- mx.symbol.Convolution(m2.data, kernel=c(5,5), num_filter=16)
+m2.bn1 <- mx.symbol.BatchNorm(m2.conv1)
+m2.act1 <- mx.symbol.Activation(m2.bn1, act_type="relu")
+m2.pool1 <- mx.symbol.Pooling(m2.act1, pool_type="max", kernel=c(2,2), stride=c(2,2))
+m2.drop1 <- mx.symbol.Dropout(m2.pool1, p=0.5)
+
+# 2nd convolutional layer
+m2.conv2 <- mx.symbol.Convolution(m2.drop1, kernel=c(3,3), num_filter=32)
+m2.bn2 <- mx.symbol.BatchNorm(m2.conv2)
+m2.act2 <- mx.symbol.Activation(m2.bn2, act_type="relu")
+m2.pool2 <- mx.symbol.Pooling(m2.act2, pool_type="max", kernel=c(2,2), stride=c(2,2))
+m2.drop2 <- mx.symbol.Dropout(m2.pool2, p=0.5)
+m2.flatten <- mx.symbol.Flatten(m2.drop2)
+
+# 4 Fully Connected layers
+m2.fc1 <- mx.symbol.FullyConnected(m2.flatten, num_hidden=1024)
+m2.act3 <- mx.symbol.Activation(m2.fc1, act_type="relu")
+
+m2.fc2 <- mx.symbol.FullyConnected(m2.act3, num_hidden=512)
+m2.act4 <- mx.symbol.Activation(m2.fc2, act_type="relu")
+
+m2.fc3 <- mx.symbol.FullyConnected(m2.act4, num_hidden=256)
+m2.act5 <- mx.symbol.Activation(m2.fc3, act_type="relu")
+
+m2.fc4 <- mx.symbol.FullyConnected(m2.act5, num_hidden=10)
+m2.softmax <- mx.symbol.SoftmaxOutput(m2.fc4)
+```
+
+```{r, fig.height=20,fig.width=10}
+graph.viz(m2.softmax)
+```
+
+
+#Построение графа для ResNet
+
+На втором сверточнос слое m3.conv2 выставлен параметр pad, чтобы размеры feature map были одинаковыми на первом и втором слое, т.к. нам надо будет их складывать. Также глубина feature map'ов должна быть одинакова.
+```{r}
+m3.data <- mx.symbol.Variable("data")
+
+# 1st convolutional layer
+m3.conv1 <- mx.symbol.Convolution(m3.data, kernel=c(5,5), num_filter=16)
+m3.act1 <- mx.symbol.Activation(m3.conv1, act_type="relu")
+
+# 2nd convolutional layer
+m3.conv2 <- mx.symbol.Convolution(m3.act1, pad=c(3,3), kernel=c(5,5), num_filter=16)
+
+# Sum with previous layer
+m3.sum1 <- m3.act1+m3.conv2
+m3.act2 <- mx.symbol.Activation(m3.sum1, act_type="relu")
+
+m3.flatten <- mx.symbol.Flatten(m3.act2)
+
+m3.fc1 <- mx.symbol.FullyConnected(m3.flatten, num_hidden=256)
+m3.act3 <- mx.symbol.Activation(m3.fc1, act_type="relu")
+
+m3.fc2 <- mx.symbol.FullyConnected(m3.act3, num_hidden=10)
+m3.softmax <- mx.symbol.SoftmaxOutput(m3.fc2)
+```
+
+```{r, fig.height=20,fig.width=10}
+graph.viz(m3.softmax)
+```
+
+
+#Блок DenseNet
+
+Здесь уже нет необходимости в одинаковой глубине, т.к. мы просто конкатенируем слои, но все еще нужно, чтобы размеры feature map'ов совпадали.
+```{r}
+m4.data <- mx.symbol.Variable("data")
+
+# 1st convolutional layer
+m4.conv1 <- mx.symbol.Convolution(m4.data, kernel=c(5,5), num_filter=16)
+m4.act1 <- mx.symbol.Activation(m4.conv1, act_type="relu")
+
+# 2nd convolutional layer
+m4.conv2 <- mx.symbol.Convolution(m4.act1, pad=c(3,3), kernel=c(5,5), num_filter=8)
+m4.concat1<-mx.symbol.concat(list(m4.act1,m4.conv2), num.args=2, dim=3)
+m4.act2 <- mx.symbol.Activation(m4.concat1, act_type="relu")
+
+# 3rd convolutional layer
+m4.conv3 <- mx.symbol.Convolution(m4.act2, pad=c(3,3), kernel=c(5,5), num_filter=4)
+m4.concat2<-mx.symbol.concat(list(m4.act1,m4.act2,m4.conv2), num.args=3, dim=3)
+m4.act3 <- mx.symbol.Activation(m4.concat2, act_type="relu")
+
+# 4th convolutional layer
+m4.conv4 <- mx.symbol.Convolution(m4.act3, pad=c(3,3), kernel=c(5,5), num_filter=4)
+m4.concat3<-mx.symbol.concat(list(m4.act1,m4.act2,m4.act3,m4.conv2), num.args=4, dim=3)
+m4.act4 <- mx.symbol.Activation(m4.concat3, act_type="relu")
+
+```
+
+```{r, fig.height=20,fig.width=10}
+graph.viz(m4.act4)
+```

@@ -1,0 +1,344 @@
+---
+title: "Boosting"
+author: "Старков Артём"
+date: "7 ноября 2017 г."
+output:
+  html_document: 
+    toc: true
+    toc_float: true
+    toc_depth: 3
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Library: gbm
+
+```{r init, warning=FALSE}
+library(gbm)
+set.seed(555);
+```
+
+В подавляющем большинстве библиотек используется реализация градиентного бустинга на регрессионных деревьях, с возможностью изменения аппроксимации функции потерь.
+
+## Построение модели
+
+Функция: gbm(...). Параметры:
+
+- formula -- формула;
+- distribution ["bernoulli"] -- для AdaBoost используется "adaboost"; может использоваться большое количество вариаций для различных задач и функций потерь;
+- data -- данные;
+- n.trees [100] -- кол-во итераций (T);
+- interaction.depth [1] -- количество узлов регрессионного дерева;
+- n.minobsinnode [10] -- минимальное количество индивидов для создания листа (pre-pruning);
+- shrinkage [0.001] -- скорость обучения ($\alpha$): дополнительный параметр для оптимизационной задачи градиентного бустинга
+$$
+b_t := \arg\min_{b \in B} \sum_{i=1}^n(b(x_i)+\alpha\mathcal{L}'(f_i))^2.
+$$
+- bag.fraction [0.5] -- для обучения может использоваться не все количество индивидов, а только его часть (стохастический градиентный бустинг); доля индивидов для обучения на следующем шаге;
+
+Для поиска оптимальной глубины дерева может использоваться кросс-валидация; строится k-fold CV для определения глубины дерева, результатом будет k+1-я модель с оптимальным числом уровней. Параметры:
+
+- train.fraction [1.0] -- доля индивидов из входных данных (data) для обучения;
+- cv.folds [0] -- количество моделей для кросс-валидации (k).
+
+## Оптимизация количества итераций N
+
+Функция: gbm.perf(...). Параметры:
+
+- object -- модель, полученная из функции gbm;
+- method -- один из трех методов: "test", "OOB", "cv":
+  1) "test" -- использует параметр train.fraction; делит входные данные на обучающую и тестовую выборки; результат -- минимум ошибки на тестовой выборке;
+  2) "OOB" -- использует параметр out-of-bagging; дает консервативную оценку n;
+  3) "cv" -- использует параметр cv.folds; оценка n строится на основе k-fold cv.
+
+## AdaBoost
+
+Построим модель AdaBoost по модельным данным с количеством деревьев $N=1000$. Данные:
+
+```{r model}
+
+n <- 2000;
+
+d <- data.frame(x=rnorm(n, 1), y=rnorm(n, 1), z=0)
+t <- sample(1:n, n/2, FALSE)
+d$x[t] <- -d$x[t]
+d$y[t] <- -d$y[t]
+d$z[t] <- 1
+
+plot(d[d$z==1,]$x, d[d$z==1,]$y, col='red', xlim=c(min(d$x), max(d$x)),
+     ylim=c(min(d$y), max(d$y)), xlab='x', ylab='y')
+points(d[d$z==0,]$x, d[d$z==0,]$y, col='blue')
+
+d.learn <- d[1:(n*0.75),]
+d.test  <- d[(n*0.75+1):n,]
+```
+
+Оценка оптимального числа итераций T по всем трем способам:
+
+```{r nest, warning=FALSE}
+gbmFit <- gbm(
+  formula           = z~.,
+  distribution      = "adaboost",
+  data              = d.learn,
+  n.trees           = 1000,
+  shrinkage         = 0.01,
+  train.fraction    = 0.75,
+  cv.folds          = 3
+);
+
+N.est <- data.frame(
+  test=gbm.perf(gbmFit, method = 'test'),
+  OOB = gbm.perf(gbmFit, method = 'OOB', oobag.curve = TRUE),
+  CV = gbm.perf(gbmFit, method = 'cv')
+)
+N.est
+```
+
+Наибольшая эффективность и вычислительная сложность у кросс-валидации, Out Of Bagging позволяет получить приблизительную оценку для небольших N.
+
+Протестируем полученную модель на разных N.
+
+```{r result}
+test_predict <- function(title, model, N) {
+  pr = predict(model, d.test, n.trees = N, type='response')
+  cat('\n', title, '\nPredict for N =', N, ': mean =',mean(round(pr)==d.test$z))
+  print(table(round(pr), d.test$z))
+}
+
+test_predict('Test', gbmFit, N.est$test)
+test_predict('OOB', gbmFit, N.est$OOB)
+test_predict('CV', gbmFit, N.est$CV)
+
+```
+
+## Градиентный бустинг с различными функциями потерь
+
+Построим модель gbm для разных функций потерь:
+
+- gaussian: squared error;
+- laplace: absolute loss;
+- tdist: t-distribution loss;
+- bernoulli: logistic regression for 0-1 outcome.
+
+```{r laplace1, warning=FALSE}
+types = c('gaussian', 'laplace', 'tdist', 'bernoulli')
+for(type in types) {
+  gbmodel <- gbm(
+    formula           = z~.,
+    distribution      = type,
+    data              = d.learn,
+    n.trees           = 6000,
+    shrinkage         = 0.01,
+    train.fraction    = 0.75
+  )
+  nb <- gbm.perf(gbmodel, method = 'OOB', plot.it = FALSE)
+  pr <- predict(gbmodel, d.test, n.trees = nb, type='response')
+  cat('\nLoss: ', type, '\nN =', nb, 'p =',mean(round(pr)==d.test$z))
+  table(pr, d.test$z)
+}
+
+```
+
+## Regression
+
+Простейший вариант регрессии. Для расчета ошибки как среднеквадратичного отклонения используется distribution = "gaussian".
+
+```{r regression}
+data(cars)
+
+regr <- gbm(dist~speed,
+  data              = cars,
+  shrinkage         = 0.01,
+  distribution      = "gaussian",
+  interaction.depth = 3,
+  bag.fraction      = 0.7,
+  n.trees           = 50000
+)
+p <- predict(regr, n.trees = 50000)
+plot(cars$speed, cars$dist)
+lines(cars$speed, p)
+cat('Sq. error:', mean((p-cars$dist)^2))
+
+
+```
+
+## Сравнение с Random Forest
+
+Сравним AdaBoost, как показавший лучшие результаты среди использовавшихся на приведенных данных, с Random forest
+
+```{r rf_vs_gbm, warning=FALSE}
+library(randomForest)
+
+rf <- randomForest(z~., d.learn)
+res <- round(predict(rf, d.test))
+table(res, d.test$z)
+mean(res == d.test$z)
+
+gbmFit <- gbm(
+  formula           = z~.,
+  distribution      = "adaboost",
+  data              = d.learn,
+  n.trees           = 20000
+)
+res = round(predict(gbmFit, d.test, n.trees = 20000, type='response'))
+table(res, d.test$z)
+mean(res == d.test$z)
+
+```
+
+
+На данных, имеющих большое смещение, бустинг работает не лучше или хуже, чем random forest. Для случаев сложной разделимости бустинг оказывается лучше random forest, но может проигрывать другим методам.
+
+### Смещенные данные с выбросами
+
+```{r, warning=FALSE}
+d0 <- data.frame(x=rnorm(n, 1), y=rnorm(n, 1), z=0)
+
+# выбросы
+tout <- sample(1:n, 50, FALSE)
+d0[tout, ]$x <- d0[tout, ]$x*20
+d0[tout, ]$y <- d0[tout, ]$y*20
+
+tz <- sample(1:n, n/2, FALSE)
+d0[tz,]$x <- -d0[tz,]$x
+d0[tz,]$y <- -d0[tz,]$y
+d0[tz,]$z <- 1
+
+t0 <- sample(1:n, n/4, FALSE)
+d0.learn <- d0[setdiff(1:n, t0),]
+d0.test  <- d0[t0,]
+
+# rforest
+rf <- randomForest(z~., d0.learn)
+res <- round(predict(rf, d0.test))
+table(res, d0.test$z)
+cat('Predict:', mean(res == d0.test$z))
+
+# gbm
+gbmFit <- gbm(
+  formula           = z~.,
+  distribution      = "adaboost",
+  data              = d0.learn,
+  n.trees           = 10000,
+  train.fraction    = 0.75 
+);
+N <- gbm.perf(gbmFit, FALSE, method = 'OOB')
+res <- round(predict(gbmFit, d0.test, n.trees = N, type='response'))
+table(res, d0.test$z)
+cat('Predict:', mean(res == d0.test$z))
+
+# для сравнения SVM
+library(e1071)
+msvm = svm(z~., d0.learn)
+res <- round(predict(msvm, d0.test))
+table(res, d0.test$z)
+cat('Predict:', mean(res == d0.test$z))
+
+```
+
+### Сложноразделимые данные
+
+```{r, warning=FALSE}
+d0 <- data.frame(x=rnorm(n, 1, 3), y=rnorm(n, 1, 3), z=0)
+
+tz <- sample(1:n, n/2, FALSE)
+d0[tz,]$x = -d0[tz,]$x
+d0[tz,]$y = -d0[tz,]$y
+d0[tz,]$z = 1
+
+t0 <- sample(1:n, n/4, FALSE)
+d0.learn <- d0[setdiff(1:n, t0),]
+d0.test  <- d0[t0,]
+
+plot(d0[tz,-3], col='red')
+points(d0[-tz, -3], col='blue')
+
+# rforest
+rf <- randomForest(z~., d0.learn)
+res <- round(predict(rf, d0.test))
+table(res, d0.test$z)
+cat('Predict:', mean(res == d0.test$z))
+
+# gbm
+gbmFit <- gbm(
+  formula           = z~.,
+  distribution      = "adaboost",
+  data              = d0.learn,
+  n.trees           = 10000,
+  train.fraction    = 0.75 
+);
+N <- gbm.perf(gbmFit, FALSE, method = 'OOB')
+res <- round(predict(gbmFit, d0.test, n.trees = N, type='response'))
+table(res, d0.test$z)
+cat('Predict:', mean(res == d0.test$z))
+
+# SVM
+msvm = svm(z~., d0.learn)
+res <- round(predict(msvm, d0.test))
+table(res, d0.test$z)
+cat('Predict:', mean(res == d0.test$z))
+
+```
+
+
+```{r, warning=FALSE}
+N0 <- 500
+t0  <- runif(N0, 0, 2*pi)
+d0 <- data.frame(
+  x=5*cos(t0)+rnorm(N0), 
+  y=5*sin(t0)+rnorm(N0), 
+  z=0)
+d1 <- data.frame(
+  x=rnorm(N0/4), 
+  y=rnorm(N0/4), 
+  z=1)
+d1 <- rbind(d1,
+  data.frame(
+    x=8+rnorm(N0/4), 
+    y=8+rnorm(N0/4), 
+    z=1))
+da <- rbind(d0, d1)
+n  <- dim(da)[1]
+da <- da[sample(1:n, n, replace = FALSE),]
+tz <- da$z==1
+plot(d0[,-3], col='red')
+points(d1[,-3], col='blue')
+
+t0 <- sample(1:n, n/4, FALSE)
+da.learn <- da[setdiff(1:n, t0),]
+da.test  <- da[t0,]
+
+plot(da[tz,-3], col='red')
+points(da[!tz, -3], col='blue')
+
+
+# rforest
+rf <- randomForest(z~., da.learn)
+res <- round(predict(rf, da.test))
+table(res, da.test$z)
+cat('Predict:', mean(res == da.test$z))
+
+# gbm
+gbmFit <- gbm(
+  formula           = z~.,
+  distribution      = "adaboost",
+  data              = da.learn,
+  n.trees           = 20000,
+  train.fraction    = 0.75 
+);
+N <- gbm.perf(gbmFit, FALSE, method = 'OOB')
+res <- round(predict(gbmFit, da.test, n.trees = N, type='response'))
+table(res, da.test$z)
+cat('Predict:', mean(res == da.test$z))
+
+# SVM
+msvm = svm(z~., da.learn)
+res <- round(predict(msvm, da.test))
+table(res, da.test$z)
+cat('Predict:', mean(res == da.test$z))
+
+```
+
+

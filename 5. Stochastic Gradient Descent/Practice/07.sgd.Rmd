@@ -1,0 +1,378 @@
+---
+title: "SGD и оптимизация"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+
+---
+```{r, results='hide',echo=F,warning=F,message=F}
+library(sgd)
+library(lattice)
+library(latticeExtra)
+library(pracma)
+library(lars)
+library(corrplot)
+data(diabetes)
+```
+
+# SGD
+
+Градиентный спуск:
+$$\theta_{k+1}=\theta_k-\eta\nabla f\left(\theta_{k}\right)$$
+
+Стохастический градиентный спуск:
+$$\theta_{k+1}=\theta_k-\eta\hat{\nabla f\left(\theta_{k}\right)}$$
+
+## Осуществление шага
+
+Рассмотрим несколько методик осуществления шага и получения ответа
+
+* Обычный стохастический градиентный спуск:
+$$\theta_{k+1}=\theta_k-\eta\hat{\nabla f\left(\theta_{k}\right)}$$
+* Nesterov Accelerated Gradient Descent:
+$$ y_{k+1}=\theta_k-\eta\hat{\nabla f\left(\theta_k\right)}$$
+$$ \theta_{k+1}=\left(1-\gamma\right)y_{k+1}+\gamma y_k$$
+* SGD с моментом:
+$$ v_0 = \mathbf{0}$$
+$$ v_{k+1} = \alpha v_{k} - \eta\hat{\nabla f\left(\theta_k\right)}$$
+$$ \theta_{k+1} = \theta_k+v$$
+* SGD с усреднением:
+$$ \hat{\theta} = \frac{1}{n}\sum\limits_{k=1}^{n}\theta_k$$
+* Неявный SGD:
+$$ \theta_{k+1}=\theta_k-\eta\hat{\nabla f\left(\theta_{k+1}\right)}$$
+
+Обновление learning rate:
+
+* $\eta_k=\eta_0\left(1+\alpha k\right)^{-c}$
+* AdaGrad:
+$$ G_k=\sum\limits_{i=1}^k \hat{\nabla f\left(\theta_k\right)}\hat{\nabla f\left(\theta_k\right)}^\mathrm{T} $$
+$$ \theta_{k+1}=\theta_k-\eta \mathrm{diag}\left(G_k\right)^{-\frac{1}{2}} \hat{\nabla f\left(\theta_k\right)}$$
+* RMSProp:
+$$ v_{k+1}=\gamma v_k+\left(1-\gamma\right)\mathrm{diag}\left( \hat{\nabla f\left(\theta_k\right)}\hat{\nabla f\left(\theta_k\right)}^\mathrm{T}\right)$$
+$$ \theta_{k+1}=\theta_k-\eta \mathrm{diag}\left(v_{k+1}\right)^{-\frac{1}{2}}\hat{\nabla f\left(\theta_k\right)}$$
+
+## SGD в R
+Для демонстрации SGD в R будем использовать функцию _sgd_ из пакета __sgd__
+
+```
+sgd(formula, data, model, model.control = list(), sgd.control = list(...))
+```
+
+* _formula_ -- описание зависимости
+* _data_ -- данные
+* _model_ -- используемая модель: "lm", "glm", "cox" (Cox proportional hazards model), "gmm" (generalized method of moments), "m" (m-estimation)
+* _model.control_ -- параметры модели
+* _sgd.control_ -- список параметров процедуры SGD:
+    * _method_ -- используемый метод SGD: "sgd", "implicit", "asgd", "ai-sgd", "momentum", "nesterov"
+    * _lr_ -- процедура обновления learning rate: "one-dim", "one-dim-eigen", "d-dim", "adagrad", "rmsprop"
+    * _lr.control_ -- параметры выбраной процедуры обновления learning rate
+    * _start_ -- начальный вектор параметров
+    * _reltol_ -- критерий остановки (в смысле относительного изменения параметров)
+    * _npasses_ -- количество проходов по данным
+    * _shuffle_ -- перемешивание данных
+
+Возвращаемый объект будет содержать поля
+
+* _converged_ -- индикатор сходимости
+* _pos_ -- моменты времени, в которые сохранено внутреннее состояние
+* _estimates_ -- оценки параметров в моменты _pos_
+* _times_ -- время, затраченное на каждую из итераций
+* _coefficients_ -- оценки коэффициентов
+
+Функция позволяет оценивать параметры следующих моделей:
+
+* Линейная и обобщённая линейная модели:
+    * _formula_ -- формула описывающая линейную модель
+    * _model.control_ -- список:
+        * _family_ -- семейство (как в функциии _glm_; по-умолчанию -- gaussian)
+* Обобщённый метод моментов:
+    * _x_ -- выборка
+    * _model.control_ -- список:
+        * _fn_ -- функция, возращающая условия моментов
+        * _gr_ -- функция, возращающая градиенты условий моментов (иначе они будут вычисляться из _fn_ числено)
+        * _nparams_ -- число параметров
+* M-оценки:
+    * _formula_ -- формула, описывающая линейную модель
+    * _model.control_ -- список:
+        * _loss_ -- функция потерь (на текущий момент поддерживается только функция потерь Huber'а)
+* Модель Cox'а:
+    * _formula_ -- формула, описывающая модель пропорциональных рисков
+
+Для сравнения расширений SGD построим линейную модель $y=x_1\beta_1+x_2\beta_2+\varepsilon$ и рассмотрим изменение оценок параметров во времени:
+
+```{r,warning=F,fig.width=10,fig.height=10}
+set.seed(42)
+N <- 10000
+sigma <- 0.1
+beta <- c(5, 1)
+start <- c(-15, -15)
+x.1 <- rnorm(N)
+x.2 <- rnorm(N)
+y <- beta[1] * x.1 + beta[2] * x.2 + rnorm(N) * sigma
+df <- data.frame(x.1=x.1, x.2=x.2, y=y)
+
+methods <- c('sgd', 'nesterov', 'ai-sgd', 'implicit', 'momentum')
+models <- lapply(methods, function(m)sgd(y~x.1+x.2+0, data=df, model='lm', sgd.control=list(method=m, start=start, shuffle=F, npasses=3, pass=T)))
+dd <- do.call(rbind, lapply(1:length(models), function(mi){m<-models[[mi]]; data.frame(xy=rbind(start, t(m$estimates)), method=rep(methods[mi], length(m$pos)+1))}))
+colnames(dd) <- c('beta_1', 'beta_2', 'method')
+```
+
+Пути, полученные различными алгоритмами и линии уровня целевой функции
+```{r,warning=F,fig.width=10,fig.height=10}
+x.min <- -20
+x.max <- 20
+xy <- meshgrid(seq(x.min, x.max, by=0.1))
+X <- as.vector(xy$X)
+Y <- as.vector(xy$Y)
+Z <- sapply(1:length(X), function(id)sum((X[id]*x.1+Y[id]*x.2-y)^2/length(x.1)))
+h<-xyplot(beta_1~beta_2, data=dd, type='l', groups=dd$method, auto.key=T, scales=list(x=list(limits=c(x.min, x.max)), y=list(limits=c(x.min, x.max))), main='SGD paths & target function levels')
+h<-h+contourplot(Z~Y*X, region=F,col.regions=brewer.pal(11,'Spectral'), colorkey=F)
+h<-h+xyplot(beta[1]~beta[2], pch=4, cex=2, col='black')
+h<-h+xyplot(start[1]~start[2], pch=3, cex=2, col='black')
+h
+
+coeffs<-lapply(1:length(methods), function(id)list(method=methods[id], coeffs = models[[id]]$coefficients))
+
+coeffs
+```
+
+Для оптимизации произвольных функций методом стохастического градиентного спуска можно воспользоваться
+обобщённым методом моментов, определив градиент функции;
+
+Например, для функции Розенброка ($f\left(x, y\right)=\left(1-x\right)^2+100\left(y-x^2\right)^2$):
+```{r,warning=F,fig.width=10,fig.height=10}
+set.seed(42)
+N <- 10000
+start <- c(-1.5, 3)
+beta <- c(1, 1)
+sigma <- 0.1
+x<-matrix(rnorm(N*2), ncol=2)*sigma
+y<-as.matrix(rep(NA, N), ncol=1)
+gr<-function(theta, xx) {
+	x<-theta[1]
+	y<-theta[2]
+	return(as.matrix(c(400*x^3-400*x*y+2*x-2+xx[1], 200*(y-x^2)+xx[2])))
+}
+
+methods <- c('sgd')
+models <- lapply(methods, function(m)
+	sgd(x, y=y, model='gmm', model.control=list(gr=gr, nparams=2), sgd.control=list(method=m, start=start, shuffle=F, npasses=6, pass=T, lr='adagrad')))
+```
+
+```{r,warning=F,fig.width=10,fig.height=10}
+dd <- do.call(rbind, lapply(1:length(models), function(mi){m<-models[[mi]]; data.frame(xy=rbind(start, t(m$estimates)), method=rep(methods[mi], length(m$pos)+1))}))
+colnames(dd) <- c('beta_1', 'beta_2', 'method')
+x.min <- -2
+x.max <- 4
+xy <- meshgrid(seq(x.min, x.max, by=0.1))
+X <- as.vector(xy$X)
+Y <- as.vector(xy$Y)
+Z <- sapply(1:length(X), function(id){x=X[id]; y=Y[id]; (1-x)^2+100*(y-x^2)^2})
+h<-xyplot(beta_1~beta_2, data=dd, type='l', groups=dd$method, auto.key=T, scales=list(x=list(limits=c(x.min, x.max)), y=list(limits=c(x.min, x.max))), main='SGD paths & target function levels')
+h<-h+contourplot(Z~Y*X, region=F,at=(1:10)*10,col.regions=brewer.pal(11,'Spectral'), colorkey=F)
+h<-h+xyplot(beta[1]~beta[2], pch=4, cex=2, col='black')
+h<-h+xyplot(start[1]~start[2], pch=3, cex=2, col='black')
+h
+
+coeffs<-lapply(1:length(methods), function(id)list(method=methods[id], coeffs = models[[id]]$coefficients))
+
+coeffs
+```
+
+
+### Зависимость от learning rate
+Сгенерируем новый набор данных с большим количеством параметров и
+рассмотрим зависимость ошибки от итерации при различном выборе
+начального learning rate
+
+Сравним методику с адаптивным изменением learning rate и степенным убыванием
+
+```{r,warning=F,fig.width=10,fig.height=10}
+set.seed(42)
+N <- 10000
+p <- 40
+sigma <- 0.1
+tform <- diag(runif(p, min=-1, max=1)*20) #%*% matrix(runif(p*p), nrow=p)
+data <- matrix(rnorm(p * N), nrow = N)
+data <- data %*% tform
+
+beta <- rnorm(p)
+beta.0 <- rnorm(1)
+reference <- c(beta.0, beta)
+y <- data %*% beta + beta.0  + rnorm(N) * sigma
+
+data <- data.frame(y=y, x=data)
+
+rates <- 10^((-2:4))
+
+sgd.models <- lapply(rates, function(r)sgd(y~., data=data, model='lm', sgd.control=list( lr.control=c(r, NA, NA, NA), pass=T, npasses=50, start=rep(0, length(beta)+1))))
+sgd.models.rmsprop <- lapply(rates, function(r)sgd(y~., data=data, model='lm', sgd.control=list(lr='rmsprop', lr.control=c(r, NA, NA), pass=T, npasses=50, start=rep(0, length(beta)+1))))
+```
+
+Построим зависимость конечной ошибки в оцениваемых параметрах от learning rate
+```{r,warning=F,fig.width=10,fig.height=10}
+errors <- sapply(sgd.models, function(m)norm(m$coefficients - reference))
+errors.rmsprop <- sapply(sgd.models.rmsprop, function(m)norm(m$coefficients - reference))
+df <- data.frame(rates=rates, errors.sgd=errors, errors.rmsprop=errors.rmsprop)
+df
+```
+Можно сделать вывод, что использование специальной методики обновления learning rate позволяет практически исключить зависимость результата от правильного выбора его начального значения.
+
+Ниже приведены зависимость ошибки оценки на очередном шаге для степенного убывания learning rate:
+```{r,warning=F,fig.width=10,fig.height=10}
+lines <- lapply(sgd.models,  function(m)data.frame(pos=m$pos, error=apply(m$estimates, 2, FUN=function(r)norm(as.matrix(r - reference)))))
+
+lines.lr <- lapply(1:length(rates), function(i){l <- lines[[i]]; lr <- rep(rates[i], dim(l)[1]); data.frame(l, learning.rate=lr)})
+lines.all <- do.call(rbind, lines.lr)
+xyplot(error~pos, lines.all, groups=lines.all$learning.rate, type='l', auto.key=T, scales=list(y=list(log=T)), main='Error vs iteration number: decreasing learning rate')
+```
+
+Ниже приведены зависимость ошибки оценки на очередном шаге для обновления  learning rate с помощью rmsprop:
+```{r,warning=F,fig.width=10,fig.height=10}
+lines.rmsprop <- lapply(sgd.models.rmsprop,  function(m)data.frame(pos=m$pos, error=apply(m$estimates, 2, FUN=function(r)norm(as.matrix(r - reference)))))
+
+lines.rmsprop.lr <- lapply(1:length(rates), function(i){l <- lines.rmsprop[[i]]; lr <- rep(rates[i], dim(l)[1]); data.frame(l, learning.rate=lr)})
+lines.rmsprop.all <- do.call(rbind, lines.rmsprop.lr)
+xyplot(error~pos, lines.rmsprop.all, groups=lines.rmsprop.all$learning.rate, type='l', auto.key=T, scales=list(y=list(log=T)), main='Error vs iteration number: adaptive learning rate')
+```
+
+[//]: ### Слишком быстрое убывание learning rate
+[//]: 
+[//]: Слишком быстрое убывание learning rate может 
+[//]: ```{r,warning=F,fig.width=10,fig.height=10}
+[//]: set.seed(42)
+[//]: sigma <- 0.1
+[//]: x <- seq(-1, 1, by=0.01)
+[//]: y <- c(abs(x))
+[//]: data <- data.frame(x=x, y=y+rnorm(length(x))*sigma)
+[//]: 
+[//]: rates <- 10^((-5:5))
+[//]: 
+[//]: sgd.models <- lapply(rates, function(r)sgd(y~poly(x, 2), data=data, model='lm', sgd.control=list( lr.control=c(r, NA, NA), pass=T, npasses=100, lr='rmsprop')))
+[//]: 
+[//]: lm(y~poly(x, 2))
+[//]: sgd.models
+[//]: ```
+
+## Скорость сходимости в сравнении с OLS
+
+Сравним временную сложность SGD с OLS
+
+Так как для задачи с $N$ наблюдениями и $p$ параметрами вычислительная
+сложность имеет порядок $O\left(Np^2\right)$, для демонстрации превосходства
+SGD выберем количество параметров
+достаточно большим.
+```{r,warning=F,fig.width=10,fig.height=10}
+set.seed(42)
+N <- 20000
+p <- 1000
+sigma <- 1
+data <- matrix(rnorm(p * N), nrow = N)
+
+beta <- rep(5, p)
+beta.0 <- 5
+reference <- c(beta.0, beta)
+y <- data %*% beta + beta.0  + rnorm(N) * sigma
+
+data <- data.frame(y=y, x=data)
+
+rates <- 1
+
+time.sgd<-system.time(sgd.models.rmsprop <- sgd(y~., data=data, model='lm',  npasses=3, reltol=1e-9, lr='rmsprop', start=rep(0, length(beta)+1), size=100))
+time.lm<-system.time(lm.model <- lm(y~., data=data))
+
+residuals.sgd <- as.matrix(data[,-1])%*%sgd.models.rmsprop$coefficients[-1]+sgd.models.rmsprop$coefficients[1]-y
+
+m <- sgd.models.rmsprop
+errors.rmsprop <- c(norm(residuals.sgd)/norm(y), time.sgd[3])
+m <- lm.model
+errors.lm <- c(norm(as.matrix(m$residuals))/norm(y), time.lm[3])
+errors <- rbind(errors.rmsprop, errors.lm)
+colnames(errors) <- c('error',  'time')
+rownames(errors) <- c('SGD',  'OLS')
+
+errors
+```
+
+Заметим также, что для задачи нелинейной регрессии время,
+требуемое в SGD на вычисление величины шага не меняется,
+в то время как нелинейная регрессия перестаёт
+иметь решение в явном виде (и требует применения итеративной процедуры).
+
+# LARS и lasso с помощью LARS
+
+Продемонстриреум отбор признаков с помощью LARS на примере набора данных _diabetes_ (используя пакет _lars_)
+
+Датасет содержит в себе 10 оригинальных признаков и набор взаимодействий между ними.
+```{r,warning=F,fig.width=10,fig.height=10}
+data <- as.data.frame(diabetes)
+corrplot(cor(data))
+```
+
+Совершим регрессию с помощью LARS:
+```
+lars(x, y, type = c("lasso", "lar", "forward.stagewise", "stepwise", trace = FALSE, normalize = TRUE, intercept = TRUE, Gram, eps = .Machine$double.eps, max.steps, use.Gram = TRUE)
+```
+
+* _x_ -- признаки
+* _y_ -- предсказываемая величина
+* _type_ -- метод (lasso сводится к lar с ограничениями)
+* _trace_ -- вывод прогресса
+* _normalize_ -- стандартизация входных значений
+* _intercept_ -- добавление свободного члена
+* _Gram_ -- матрица корреляций (для повторных запусков)
+* _eps_ -- машинный $\varepsilon$
+* _max.steps_ -- число шагов
+
+Для того, чтобы выбрать число признаков, воспользуемся кросс-валидацией
+```
+cv.lars(x, y, K = 10, index, trace = FALSE, plot.it = TRUE, se = TRUE, type = c("lasso", "lar", "forward.stagewise", "stepwise"), mode = c("fraction", "step"), ...)
+```
+
+* _x_ -- признаки
+* _y_ -- предсказываемая величина
+* _type_ -- метод (lasso сводится к lar с ограничениями)
+* _K_ -- кратность кросс-валидации
+* _index_ -- момент (регуляризации), в который вычисляются значения коэффициентов и оценка ошибки по кросс-валидации
+* _trace_ -- вывод прогресса
+* _plot.it__ -- построение графика
+* _se_ -- строить оценку стандартной ошибки
+* _mode_ -- режим кросс-валидации:
+    * _fraction_ -- доля от насыщенной модели (для lasso и forward.stagewise)
+    * _step_  -- по шагам (для stepwise и lar)
+    
+
+```{r,warning=F,fig.width=10,fig.height=10}
+X <- as.matrix(data[,colnames(data)!='y'])
+cv.result <- cv.lars(X, data$y, index=1:50, type='lar', mode='step')
+```
+
+Можно видеть, что минимум достигается на количестве элементов 
+```{r,warning=F,fig.width=10,fig.height=10}
+min.step = cv.result$index[which.min(cv.result$cv)]
+print(min.step)
+```
+
+Оценим коэффициенты модели
+```{r,warning=F,fig.width=10,fig.height=10}
+model.lars <- lars(X, data$y, type='lar', max.steps=50)
+print(model.lars$beta[min.step, model.lars$beta[min.step,]!=0])
+```
+
+Также можно построить изменение оценок коэффициентов по шагам:
+```{r,warning=F,fig.width=10,fig.height=10}
+plot(model.lars)
+```
+
+
+
+[//]:#  # Alternating minimization: IRLS, EM
+[//]:#  
+[//]:#  Рассмотрим задачу линейной регрессии:
+[//]:#  $$\sum\limits_{i=1}^{n}h\left(r\left(\beta, x_i,y_i\right)\right)\rightarrow\min\limits_{\beta\in\mathbb{R}^p}$$
+[//]:#  $$r\left(\beta, x_i, y_i\right)=\beta^\mathrm{T}x_i-y_i$$
+[//]:#  
+[//]:#  Заменив $h\left(w\right)$ на  
+[//]:#  $$\sum\limits_{i=1}^{n}h\left(x_i^\mathrm{T}\beta-y_i\right)\rightarrow\min\limits_{\beta\in\mathbb{R}^p}$$
+

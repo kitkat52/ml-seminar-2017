@@ -1,0 +1,848 @@
+\documentclass[unicode, notheorems, pdf]{beamer}
+%
+\mode<presentation> 
+{
+  \usetheme[numbers, totalnumbers, minimal]{Statmod}
+  \setbeamercovered{transparent}
+}
+%
+\usepackage[T2A]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[russian]{babel}
+\usepackage{indentfirst}
+\usepackage{amsmath}
+\usepackage{graphicx}
+\usepackage{subfigure}
+\usepackage{longtable}
+\usepackage{color}
+%
+\graphicspath{{plots/}}
+\usefonttheme[onlymath]{serif}
+\DeclareMathOperator*{\argmin}{arg\,\min}
+\DeclareMathOperator*{\argmax}{arg\,\max}
+\DeclareMathOperator*{\diag}{diag}
+\DeclareMathOperator*{\tod}{\searrow}
+\DeclareMathOperator{\too}{\to}
+\DeclareMathOperator*{\cdc}{,\dots,}
+%
+\setbeamerfont{institute}{size=\small}
+\setbeamerfont{author}{size=\small}
+\setbeamerfont{title}{size=\large}
+%
+\newtheorem{theorem}{Теорема}
+\newtheorem{example}{Пример}
+\newtheorem{property}{Свойство}
+\newtheorem{hypotesys}{Гипотеза}
+\newtheorem{definition}{Определение}
+%
+\title[Обучение без учителя]{Обучение без учителя. Разделение смеси распределений. Кластеризация.}
+\author{Сальников Дмитрий Игоревич, гр. 622}
+\institute[СПбГУ]{Санкт-Петербургский государственный университет\\
+    Прикладная математика и информатика \\
+	% Вычислительная стохастика и статистические модели \\
+    % \vspace{1cm}
+    % Научный руководитель: д.ф.-м.н. Мелас В.Б. \\
+    % Рецензент: к.ф.-м.н. Шпилев П.В.
+    % \vspace{0.3cm}
+}
+\date{
+    {\small Санкт-Петербург\\
+    2017г.}
+}
+\subject{Beamer}
+%
+\begin{document}
+\begin{frame}
+    \titlepage
+\end{frame}
+%
+\begin{frame}{Обучение без учителя}
+	Особенности:
+	\vspace{0.5cm}
+	\begin{itemize}
+		\item известны только описания множества объектов $X$ и обучающей выборки $X^l = \{x_i\}_{i=1}^l \subset X$;
+		\vspace{0.5cm}
+		\item отсутствует отклик (зависимая переменная);
+		\vspace{0.5cm}
+		\item  требуется обнаружить внутренние взаимосвязи, зависимости, закономерности между объектами.
+	\end{itemize}
+\end{frame}
+%
+\begin{frame}{Обучение без учителя}
+	Типы задач:
+	\vspace{0.5cm}
+	\begin{itemize}
+        \item Задачи кластеризации;
+        \vspace{0.5cm}
+        \item Задачи поиска правил ассоциации;
+        \vspace{0.5cm}
+        \item Задачи сокращения размерности;
+        \vspace{0.5cm}
+        \item Задачи визуализации данных.
+    \end{itemize}	
+\end{frame}
+%
+% решаемая оптимизац задача и метод ее решения.
+% 	картинки биплота и прямой.
+% 	доля объясненной дисперсии.
+% 	макс к-во компонент и нужное.
+% 	необходимость нормировки.
+\begin{frame}{Анализ главных компонент}
+	
+	\begin{itemize}
+		\item позволяет сократить размерность входных данных;
+		\vspace{.25cm}
+		\item является средством визуализации данных.
+	\end{itemize}
+
+	\pause
+	\vspace{1cm}
+	\textbf{Дано:}
+
+	$X=\mathbb{R}^n$, $X^l=[X_1,\dots,X_n]$, $\overline{X_i}=0$, $i=\overline{1:n}$.
+
+	\vspace{.5cm}
+	\textbf{Задача:}
+	\begin{itemize}
+		\item аппроксимировать данные подпространством меньшей размерности $s<n$:
+		\[\sum_{i=1}^{n}dist^2(x_i,\alpha_s) \longrightarrow \min_{\begin{array}{c}\scriptstyle\alpha_s \subset \mathbb{R}^n,\\\scriptstyle dim(\alpha_s)=s\end{array}}.\]		
+
+		% Решается с помощью the SVD.
+		% \item аппроксимировать матрицу $X$ матрицей меньшего ранга:
+		% \[;\]
+
+		% \item найти подпространство меньшей размерности, в ортогональной проекции на которое разброс данных максимален:
+		% 	\[\begin{array}{c}
+		% 		\displaystyle S^2_j[XU_j] = \frac{1}{l-1}\sum_{i=1}^{l}(x_i,U_j)^2 \to \max_{U_j}, \, j=\overline{1:k},\\
+		% 		\displaystyle \overline{X} = \vec{0}, \; U_i \perp U_j, \; ||U_j||=1.
+		% 	\end{array}\]
+		 
+		% \item для данного случайного вектора найти ортогональное преобразование, обнуляющее внутренние корреляции.
+	\end{itemize}
+
+	% \pause
+	% \vspace{.25cm}
+	% Все эти задачи решаются с помощью сингулярного разложения.
+\end{frame}
+%
+\begin{frame}{Анализ главных компонент}
+	
+	$S=\frac{1}{l-1}X^TX$ -- выборочная ковариационная матрица.
+
+	\vspace{.5cm}
+	\textbf{SVD($S$):}
+
+	$X_{l \times n}^T = U_{n \times k} \Lambda_{k \times k}^{\frac{1}{2}} V_{l \times k}^T$, $\displaystyle k = \sum_{j=1}^n I_{\{\lambda_j \not= 0\}} \le \min(l-1,n)$,
+
+	\pause
+	$U=[U_1,\dots,U_k]$, $U_{i} \perp U_{j}$, $||U_j||=1$ -- матрица главных направлений (перехода к новым признакам),
+
+	$\Lambda = diag(\lambda_1,\dots,\lambda_k)$, $\lambda_1\ge\dots\ge\lambda_k>0$ -- диагональная матрица ненулевых собственных чисел матрицы $S$,
+
+	$V = [V_1 \cdc V_k]$, $V_{i} \perp V{j}$, $||V_j||=1$ -- факторные векторы,
+
+	\vspace{.5cm}
+	$Z = [Z_1,\dots,Z_k] = X U$, $Z_j = \sqrt{\lambda_j} V_j$ -- матрица главных компонент (новых признаков).
+\end{frame}
+%
+\begin{frame}{Анализ главных компонент}
+
+	Подпространство, натянутое на $[U_1 \cdc U_s]$, $s \le k$ решает поставленную задачу.
+
+	\vspace{1cm}
+	% Для сокращения размерности при минимальных потерях информации следует ограничиваться неполным набором компонент. 
+
+	Компоненты, соответствующие большим $\lambda_j$, объясняют больший процент дисперсии:
+
+	$Var(Z_j) = \lambda_j$, $j=1,\dots,k$; $\displaystyle\sum_{j=1}^{n}Var(X_j) = \sum_{j=1}^{k}\lambda_j$.
+
+	$\displaystyle\frac{\lambda_j}{\sum_{s=1}^{k}\lambda_s}$ -- доля объясненной дисперсии компоненты $Z_j$.
+\end{frame}
+%
+\begin{frame}{Методы выбора числа главных компонент}
+
+	\begin{itemize}
+		\item фиксируем минимальную долю объясненной дисперсии $S_{min}$, тогда $k' = \displaystyle\argmin_{s}\left\{\frac{\sum_{j=1}^{s}\lambda_j} {\sum_{j=1}^{k}\lambda_j} \ge S_{min}\right\}$;
+
+		\item правила Кайзера: $k' = \displaystyle\sum_{j=1}^{k}I_{\left\{\lambda_j > \frac{1}{k}\sum_{s=1}^{k}\lambda_s\right\}}$
+
+		(собственные числа, большие среднего значения);
+
+		\item правило сломанной трости: \mbox{$k' = \displaystyle\argmax_{s}\left\{ \frac{\lambda_1}{\sum_{j=1}^{k}\lambda_j} > \frac{1}{k}\sum_{j=1}^{k}\frac{1}{j} \cdc \frac{\lambda_s}{\sum_{j=1}^{k}\lambda_j} > \frac{1}{k}\sum_{j=s}^{k}\frac{1}{j} \right\}$}
+
+		($\displaystyle\frac{1}{k}\sum_{j=s}^{k}\frac{1}{j}$ -- МО упорядоченных по убыванию длин кусков трости длины 1, случайно поломанной на $k$ частей);
+
+		\item выбор количества компонент на усмотрение эксперта.
+	\end{itemize}
+\end{frame}
+%
+\begin{frame}{Стандартизация данных}
+
+	Перед применением АГК рекомендуется привести данные к одной шкале; простой путь -- стандартизация признаков.
+
+	\vspace{.25cm}
+	\begin{example}
+		Пусть ковариационная матрица $S$ имеет вид
+		\[S = \left(\begin{array}{cc} a^2 & a\rho \\ a\rho & 1 \end{array}\right),\]
+		тогда при $a\to\infty$
+		\[\frac{u_{11}}{u_{12}} \to \frac{a}{\rho},\]
+		\[\frac{\lambda_1}{\lambda_1+\lambda_2} \to 1.\]
+		Вклад первого признака $X_1$ в $U_1$ будет большим, а компонента $Z_2$ будет иметь малую долю объясненной дисперсии.
+		% Второй признак почти не вносит вклад в общую дисперсию, и мы можем отбросить его. А вдруг это критический показатель, например, ВИЧ-инфекции?
+	\end{example}
+\end{frame}
+%
+\begin{frame}{Пример визуализации}
+	\begin{figure}\begin{center}
+		\includegraphics[width=.8\linewidth]{agk.pdf}
+	\end{center}\end{figure}
+\end{frame}
+%
+\begin{frame}{Пояснения к графику}
+	
+	В плоскости первых двух компонент $span(U_1,U_2)$ (объясняющих больше $95\%$ дисперсии) изображены объекты и исходные орты с координатами $(U_{i1}, U_{i2})$, $i=\overline{(1:n)}$.
+
+	\vspace{.5cm}
+	Шкала справа показывает, насколько хорошо объекты описываются плоскостью $span(U_1,U_2)$. Согласно формуле
+	\begin{eqnarray*}
+	&\cos^2(\angle(x_i, span(U_1,U_2))) = \left(\frac{x_iU_1}{||x_i||\,||U_1||}\right)^2 + \left(\frac{x_iU_2}{||x_i||\,||U_2||}\right)^2 =&\\
+	&=(z_{i1}^2+z_{i2}^2)/||x_i||^2&
+	\end{eqnarray*}
+	объекты, для которых $\cos^2$ мал, плохо описываются плоскостью $span(U_1,U_2)$. Такие объекты окрашены в темный цвет.
+\end{frame}
+%
+\begin{frame}{Выводы}
+
+	\begin{itemize}
+		\item Метод не требует выполнения каких-либо гипотез и может быть применен к любым данным;
+
+		\vspace{.25cm}
+		\item требует предварительного центрирования и масштабирования;
+
+		\vspace{.25cm}
+		\item позволяет значительно сократить размерность пространства признаков;
+
+		\vspace{.25cm}
+		\item Проекции на первые два или три главных направления позволяют наглядно визуализировать данные.
+		% \item стоит уделять особое внимание выбору главных компонент
+
+
+	\end{itemize}
+\end{frame}
+%
+\title[Разделение смеси распределений]{}
+% \begin{frame}{Разделение смеси распределений}
+% 	\begin{eqnarray*}
+% 		p(x)=\sum_{j=1}^kw_jp_j(x;\theta_j),&\sum_{j=1}^kw_j=1&w_j\ge0,
+% 	\end{eqnarray*}
+% 	$p_j(x,\theta_j)$ -- 
+% \end{frame}
+%
+\begin{frame}{Разделение смеси распределений}
+	\begin{hypotesys}[о вероятностной природе данных]
+		$X^l$ -- независимы, одинаково распределены с плотностью
+		\[p(x) = \sum_{j=1}^k w_j p_j(x;\theta_j),\:\sum_{j=1}^k w_j=1,\:w_j\ge0,\,j=\overline{1:k}.\]
+	\end{hypotesys}
+
+	\pause
+	\vspace{.25cm}
+	{\bf Задачи:}
+	\begin{enumerate}
+		\item зная $k$ оценить $\Theta=(w_1,\dots,w_k,\theta_1,\dots,\theta_k)$;
+		\item оценить $k$.
+	\end{enumerate}
+
+	\pause
+	\vspace{.25cm}
+	Аналитическое решение задачи 1:
+	\[L(\Theta)=\ln\prod_{i=1}^lp(x_i)=\sum_{i=1}^l\ln\sum_{j=1}^kw_jp_j(x_i;\theta_j)\to\max_\Theta.\]
+\end{frame}
+
+\begin{frame}{EM--алгоритм}
+	\begin{theorem}[необходимые условия экстремума]
+		$\Theta$ -- точка локального экстремума $L(\Theta)$, если она удовлетворяет следующей системе уравнений:
+		
+		\setlength\arraycolsep{2pt}
+		\begin{tabular}{c c c}
+			\parbox{0.54\textwidth}{
+			\begin{eqnarray*}
+				g_{ij}=\left[P(j|x_i)\right]=\frac{w_jp_j(x_i;\theta_j)}{\displaystyle\sum_{s=1}^kw_sp_s(x_i;\theta_s)},
+			\end{eqnarray*}} &
+			\parbox{0.15\textwidth}{
+			\begin{eqnarray*}
+				i&=&\overline{1:l},\\
+				j&=&\overline{1:k};
+			\end{eqnarray*}
+			} & 
+			(E--шаг)
+			\end{tabular}
+			\begin{tabular}{c c c}
+			\parbox{0.44\textwidth}{
+			\begin{eqnarray*}
+				\theta_j&=&\argmax_{\theta}\sum_{i=1}^lg_{ij}\ln p_j(x_i;\theta),\\
+				w_j&=&\frac{1}{l}\sum_{i=1}^lg_{ij},
+			\end{eqnarray*}} &
+			\parbox{0.25\textwidth}{
+			\begin{eqnarray*}
+				j&=&\overline{1:k}.
+			\end{eqnarray*}} &
+			(M--шаг)
+		\end{tabular}
+	\end{theorem}
+\end{frame}
+
+\begin{frame}{EM--алгоритм}
+	\begin{enumerate}
+		\item задать $k$, $\delta$, начальные $\Theta=(w_j,\theta_j)_{j=1}^k$ и $\{g_{ij}\}_{i,j=1}^{l,k}$;
+		\item\textcolor{blue}{повторять}
+		\item\hspace{.5cm}E--шаг (expectation):\\
+		\hspace{.5cm}\textcolor{blue}{для всех} $i=1,\dots,l$, $j=1,\dots,k$
+		\[g_{ij}^0=g_{ij};\hspace{.5cm}g_{ij}=\frac{w_jp_j(x_i;\theta_j)}{\displaystyle\sum_{s=1}^kw_sp_s(x_i;\theta_s)};\]
+		\item\hspace{.5cm}M--шаг (maximization):\\
+		\hspace{.5cm}\textcolor{blue}{для всех} $j=1,\dots,k$
+		\[\theta_j=\argmax_{\theta}\sum_{i=1}^lg_{ij}\ln p_j(x_i;\theta);\hspace{.5cm}w_j=\frac{1}{l}\sum_{i=1}^lg_{ij};\]
+		\item \textcolor{blue}{пока} $\max_{i,j}|g_{ij}-g_{ij}^0|>\delta$;
+	\end{enumerate}
+\end{frame}
+
+\begin{frame}{EM--алгоритм}
+
+	{\bf Достоинства:}
+	\vspace{.25cm}
+	\begin{itemize}
+		\item сводит сложную многоэкстремальную задачу к максимизации правдоподобия по компонентам смеси;
+		\vspace{.25cm}
+		\item довольно быстрая скорость сходимости.
+	\end{itemize}
+
+	\vspace{1cm}
+	{\bf Проблемы:}
+	\vspace{.25cm}
+	\begin{itemize}
+		\item чувствителен к начальному приближению;
+		\vspace{.25cm}
+		\item проблема выбора числа компонент смеси.
+	\end{itemize}
+\end{frame}
+
+\begin{frame}{Добавление и удаление компонент смеси}
+
+	\begin{itemize}
+		\item Если много объектов $x_i$ имеют низкие правдоподобия $p(x_i)$, то создаем $k+1$-ю компоненту и по этим объектам стоим ее начальное приближение;
+		\pause
+		\item (Иерархический ЕМ) Для каждой компоненты $j=1\dots k$ смотрим на соответствующие ей объекты $x_i$ ($\displaystyle\argmax_{j=1\dots k}g_{ij}$). Если много таких $x_i$ имеют низкие правдоподобия $p_j(x_i)$, то расщепляем компоненту на две;
+		\pause
+		\item если у $j$-ой компоненты низкий $w_j$ -- удаляем ее;
+		\pause
+		\item регуляризация: $L(\Theta)-\tau\displaystyle\sum_{j=1}^k\ln w_j\to\max$, тогда\\
+		$\theta_j$ -- те же, а $w_j=\left(\frac{1}{l}\displaystyle\sum_{i=1}^lg_{ij}-\tau\right)_{+}$.
+	\end{itemize}
+\end{frame}
+
+\begin{frame}{Модификации ЕМ--алгоритма}
+	
+	\textcolor{blue}{\bf Обобщенный ЕМ:} на М-шаге при вычислении
+	$\theta_j=\displaystyle\argmax_{\theta}\displaystyle\sum_{i=1}^lg_{ij}\ln p_j(x_i;\theta)$ достаточно лишь сместиться в направлении максимума, не добиваясь высокой точности.
+
+	% \vspace{.25cm}
+	{\bf Преимущество:} уменьшается время работы при сопоставимом качестве решения.
+
+	\pause
+	\vspace{.25cm}
+	\textcolor{blue}{\bf Стохастический ЕМ:} на М-шаге предварительно $\forall x_i$ промоделировать принадлежность к одному из классов $X_j$ согласно распределению с весами $g_{ij}$, $j=1 \dots k$.\\
+	Затем максимизировать невзвешенные правдоподобия
+	$\theta_j=\displaystyle\argmax_{\theta}\displaystyle\sum_{x_i\in X_j}\ln p_j(x_i;\theta)$.
+
+	% \vspace{.25cm}
+	{\bf Преимущество:} меньше зависит от начального приближения, способен ближе подбираться к глобальному максимуму, довольно быстро работает.
+\end{frame}
+
+\begin{frame}{Смесь нормальных распределений}
+	
+	\begin{hypotesys}[о пространстве объектов и форме кластеров]
+		$X=\mathbb{R}^n$, $x=(x_1, \dots, x_n)$, $\theta_j = (\mu_{j1}, \dots, \mu_{jn}, \sigma_{j1}, \dots, \sigma_{jn})$,
+		\[p_j(x; \theta_j) = (2 \pi)^{-\frac{n}{2}} (\sigma_{j1} \cdots \sigma_{jn})^{-1} \exp(-\frac{1}{2} \sum_{s=1}^n \sigma_{js}^{-2} |x_s-\mu_{js}|^2)\]
+		$\mu_j = (\mu_{j1}, \dots, \mu_{jn})$ -- центр кластера $j$,\\
+		$\Sigma_j = \diag(\sigma_{j1}^2, \dots, \sigma_{jn}^2)$ -- диагональная матрица ковариаций.
+	\end{hypotesys}
+
+	\pause
+	\vspace{.25cm}
+	Тогда на М-шаге:
+	\[\mu_{js} = \frac{1}{l w_j}\sum_{i=1}^l g_{ij} x_{is}, \: j = \overline{1:k}, \: s = \overline{1:n},\]
+	\[\sigma_{js}^2 = \frac{1}{l w_j} \sum_{i=1}^l g_{ij} (x_{is
+	} - \mu_{js})^2, \: j = \overline{1:k}, \: s = \overline{1:n}.\]
+\end{frame}
+
+\title[Кластеризация]{}
+
+\begin{frame}{Кластеризация}
+
+	Дано:
+	\begin{itemize}
+		\item $X$ -- пространство объектов;
+		\item $X^l=\{x_i\}^l_{i=1}$ -- обучающая выборка;
+		\item $\rho:X\times X\to[0,\inf)$ -- функция расстояния между объектами;
+		% \item $S$ -- пространство кластеров;
+		% \item $R:SxS\rightarrow[0,\inf)$ -- расстояние между кластерами.
+	\end{itemize}
+	\vspace{0.5cm}
+	Найти:
+	\begin{itemize}
+		\item $Y$ -- множество кластеров;
+		\item $a:X\to Y$ -- алгоритм кластеризации, такой что:
+		\begin{enumerate}[---]
+			\item каждый кластер состоит из близких объектов;
+			\item объекты разных кластеров существенно различны.
+		\end{enumerate}
+	\end{itemize}
+\end{frame}
+
+\begin{frame}{Некорректность задачи кластеризации}
+	Решение задачи кластеризации принципиально неоднозначно:
+	\vspace{0.25cm}
+	\begin{itemize}
+		\item точной постановки задачи кластеризации нет;
+		\vspace{0.5cm}
+		\item существует много критериев качества кластеризации;
+		\vspace{0.5cm}
+		\item существует много эвристических методов кластеризации;
+		\vspace{0.5cm}
+		\item число кластеров $|Y|$, как правило, неизвестно заранее;
+		\vspace{0.5cm}
+		\item результат кластеризации существенно зависит от метрики $\rho$, задаваемой субъективно.
+	\end{itemize}
+\end{frame}
+
+\begin{frame}{Цели кластеризации}
+	\begin{itemize}
+		\item Упростить дальнейшую обработку данных, разбить множество $X^l$ на группы схожих объектов, чтобы работать с каждой группой в отдельности\newline(задачи классификации, регрессии, прогнозирования);
+		\vspace{0.25cm}
+		\item сократить объем хранимых данных, оставив по одному представителю от каждого кластера\newline(задачи сжатия данных);
+		\vspace{0.25cm}
+		\item выделить нетипичные объекты, которые не подходят ни к одному из кластеров\newline(задачи одноклассовой классификации);
+		\vspace{0.25cm}
+		\item построить иерархию множества объектов\newline(задачи таксономии).
+	\end{itemize}
+\end{frame}
+
+\begin{frame}{<<Плохие>> кластерные структуры}
+	\begin{enumerate}[]
+		\item 
+		\begin{tabular}{c c}
+			\parbox{0.15\textwidth}{\includegraphics[width=0.15\textwidth]{lent.pdf}} & \parbox{0.7\textwidth}{ленточные кластеры. Внутрикластерные расстояния могут быть больше межкластерных;}
+		\end{tabular}
+		\vspace{0.5cm}
+		\item 
+		\begin{tabular}{c c}
+			\parbox{0.15\textwidth}{\includegraphics[width=0.15\textwidth]{perek.pdf}} & \parbox{0.7\textwidth}{перекрывающиеся кластеры;}
+		\end{tabular}
+		\vspace{0.5cm}
+		\item 
+		\begin{tabular}{c c}
+			\parbox{0.15\textwidth}{\includegraphics[width=0.15\textwidth]{fon.pdf}} & \parbox{0.7\textwidth}{кластеры, соединяющиеся перемычками и накладывающиеся на фон из редко расположенных объектов;}
+		\end{tabular}
+		\vspace{0.5cm}
+		\item 
+		\begin{tabular}{c c}
+			\parbox{0.15\textwidth}{\includegraphics[width=0.15\textwidth]{ots.pdf}} & \parbox{0.7\textwidth}{кластеры могу отсутствовать.}
+		\end{tabular}
+	\end{enumerate}
+\end{frame}
+
+\begin{frame}{Нечеткий алгоритм c-средних}
+
+	{\bf Обозначения:}
+
+	$\mu=\{\mu_j\}_{j=1}^k$ -- центры кластеров, 
+
+	\vspace{.25cm}
+	\mbox{$U=\{U_{ij}\}_{l \times k}$ -- матрица принадлежности объектов $x_i$ кластеру $j$,} $\displaystyle\sum_{j=1}^k U_{ij}=1$, $i=\overline{1:l}$,
+
+	$m > 1$ -- параметр <<размытости>>; Обычно полагают $m=2$.
+
+	\pause
+	\vspace{.5cm}
+	{\bf Решаемая оптимизационная задача:}
+	\[\sum_{i=1}^l \sum_{j=1}^k U_{ij}^m \rho(x_i,\mu_j) \to \min_{U,\,\mu_j}.\]
+
+	\pause
+	\vspace{.25cm}
+	При $m \to 1$ вырождается в алгоритм k-средних, при этом\\
+	\hspace{.5cm} $\forall$  $i=1,\dots,l$ $\exists$ $j_i\in\{1,\dots,k\}$: $U_{ij_i}=1$, $U_{ij}=0,$ $j\not=j_i$.
+\end{frame}
+
+
+\begin{frame}{Нечеткий алгоритм c-средних}
+	
+	\begin{enumerate}
+		\item Задать $k$, $m$, $\epsilon$ и начальные $\mu_j$, $j=1,\dots,k$;
+
+		\item \textcolor{blue}{повторять}
+
+		\item \hspace{.5cm} вычислить принадлежность $x_i$ к каждому кластеру:
+		\begin{tabular}{c c}
+		\parbox{.48\linewidth}{
+			\setlength\arraycolsep{2pt}
+			\begin{eqnarray*}
+				P_{ij} &=& \rho(x_i,\mu_j);\\
+				U_{ij} &=& \frac{1}{\sum_{s=1}^k \left( \frac{P_{ij}}{P_{is}} \right)^{\frac{1}{m-1}}};
+			\end{eqnarray*}
+		} & $i=1,\dots,l,\;j=1,\dots,k$;
+		\end{tabular}
+
+		\item \hspace{.5cm} пересчитать центры кластеров:
+		\[\mu_{j}=\frac{\sum_{i=1}^{l} U_{ij}^m x_{i}}{\sum_{i=1}^{l} U_{ij}^m}, \: j=1,\dots,k;\]
+
+		\item \textcolor{blue}{пока} $||U-U^0||>\epsilon$, либо $\displaystyle\max_{j=1,\dots,k} \rho(\mu_j,\mu_j^0)>\epsilon$;
+	\end{enumerate}
+\end{frame}
+
+\begin{frame}{Нечеткий алгоритм c-средних}
+
+	Проблемы:
+	\begin{itemize}
+		\item чувствительность к начальным приближениям;
+
+		\item чувствительность к выбросам;
+
+		\item выбор числа кластеров $k$;
+
+		\item в общем случае обладает плохо исследованной сходимостью.
+	\end{itemize}
+
+	\pause
+	\vspace{.25cm}
+	Решения:
+	\begin{itemize}
+		\item несколько случайных кластеризаций;
+
+		\item постепенное наращивание $k$ (аналогично ЕМ-алгоритму);
+
+		\item центры кластеров должны значительно различаться;
+
+		\item алгоритм $k$-средних сходится за конечное число шагов;
+
+		\item нечеткие алгоритмы решают проблему выбросов и нивелируют чувствительность к начальным данным.
+	\end{itemize}
+\end{frame}
+
+\begin{frame}{Агломеративная иерархическая кластеризация}
+	Алгоритм Ланса--Уильямса:
+	\begin{enumerate}
+		\item Сначала все кластеры одноэлементные:
+			$C_1=\left\{\{x_1\},\dots,\{x_l\}\right\}$; $R_1=0;$\\
+			$\forall i\not=j$ вычислить $R\left(\{x_i\},\{x_j\}\right)$;
+		\item\textcolor{blue}{для всех} $t=2,\dots,l$ (t -- номер итерации)
+		\item\hspace{.5cm}найти в $C_{t-1}$ два ближайших кластера:\\
+			\hspace{.5cm}$\displaystyle(U,V)=\argmin_{U \not= V}R(U,V);$\\
+			\hspace{.5cm}$R_t=R(U,V);$
+		\item\hspace{.5cm}слить их в один кластер:\\
+			\hspace{.5cm}$W=U\cup V$;\\
+			\hspace{.5cm}$C_t=C_{t-1}\cup W\setminus\{U,V\}$;
+		\item\hspace{.5cm}\textcolor{blue}{для всех} $S \in C_t \setminus W$
+		\item\hspace{1cm}вычислить $R(W,S)$ по формуле Ланса--Уильямса;
+	\end{enumerate}
+\end{frame}
+
+\begin{frame}{Формула Ланса--Уильямса}
+
+	Позволяет обобщить большинство способов определить расстояние между кластерами 
+	\[R(W,S),\:W=U\cup V,\:U,V,S\subset X,\] 
+	зная расстояния 
+	\[R(U,S),\,R(V,S),\,R(U,V).\]
+
+	\pause
+	\vspace{.5cm}
+	Формула Ланса--Уильямса:
+	\begin{eqnarray*}
+		R(U\cup V,S)=\alpha_U\cdot R(U,S)+\alpha_V\cdot R(V,S)+&\\
+		+\beta\cdot R(U,V)+\gamma\cdot |R(U,S)-R(V,S)|,&\alpha_U,\alpha_V,\beta,\gamma\in\mathbb{R}.
+	\end{eqnarray*}
+\end{frame}
+
+\begin{frame}{Примеры межкластерных расстояний}
+	% \setlength\arraycolsep{2pt}
+	Расстояние ближнего соседа
+	% ($\alpha_U=\alpha_V=\frac{1}{2}$, $\beta=0$, $\gamma=-\frac{1}{2}$)
+	:
+	\[R^n(U,V)=\min_{u\in U,v\in V}\rho(u,v),\;U,V\subset X;\]
+	расстояние дальнего соседа
+	% ($\alpha_U=\alpha_V=\frac{1}{2}$, $\beta=0$, $\gamma=\frac{1}{2}$)
+	:
+	\[R^l(U,V)=\max_{u\in U,v\in V}\rho(u,v);\]
+	групповое среднее расстояние
+	%($\alpha_U=\frac{|U|}{|U \cup V|}$, $\alpha_V=\frac{|V|}{|U \cup V|}$, $\beta=\gamma=0$)
+	:
+	\[R^g(U,V)=\frac{1}{|U||V|}\sum_{u\in U}\sum_{v\in V}\rho(u,v);\]
+	расстояние между центрами
+	% ($\alpha_U=\frac{|U|}{|U \cup V|}$, $\alpha_V=\frac{|V|}{|U \cup V|}$, $\beta=-\alpha_U\alpha_V$, $\gamma=0$)
+	:
+	\[R^c(U,V)=\rho^2\left(\sum_{u\in U}\frac{u}{|U|},\sum_{v\in V}\frac{v}{|V|}\right);\]
+	расстояние Уорда
+	% ($\alpha_U=\frac{|U|}{|U \cup V|}$, $\alpha_V=\frac{|V|}{|U \cup V|}$, $\beta=-\alpha_U\alpha_V$, $\gamma=0$)
+	:
+	\[R^w(U,V)=\frac{|U||V|}{|U|+|V|}R^c(U,V).\]
+\end{frame}
+
+\begin{frame}{Визуализация кластерной структуры}
+	\begin{definition}
+		Дендрограмма -- деревоподобный график, отражающий процесс последовательных слияний и структуру кластеров.
+	\end{definition}
+	\begin{figure}
+		\subfigure{
+			\includegraphics[width=0.5\textwidth]{ward.pdf}
+			\includegraphics[width=0.5\textwidth]{centroid.pdf} 
+		}
+	\end{figure}
+\end{frame}
+
+\begin{frame}{Свойство монотонности}
+	\begin{definition}
+		Функция расстояния между кластерами $R$ {\it монотонна}, если при каждом слиянии расстояние между объединяемыми кластерами не убывает: $R_2\le R_3\le\dots\le R_l$.
+	\end{definition}
+	\begin{theorem}[Миллиган]
+		Функция расстояния между кластерами $R$ монотонна, если 
+		\[\alpha_U\ge0,\,\alpha_V\ge0,\,\alpha_U+\alpha_V+\beta\ge1,\,\min(\alpha_U,\alpha_V)+\gamma\ge0.\]
+	\end{theorem}
+	\mbox{Если $R$ монотонна, то дендрограмма не имеет самопересечений.}
+
+	\vspace{.5cm}
+	$R^c$ не монотонно; $R^n$, $R^l$, $R^g$, $R^w$ -- монотонны.
+\end{frame}
+
+\begin{frame}{Свойства сжатия и растяжения}
+	\begin{definition}
+		Функция межкластерного расстояния $R$ сжимающая, если $\forall t\:R_t\le \rho(\mu_U,\mu_V)$ и растягивающая -- если $\forall t\:R_t\ge \rho(\mu_U,\mu_V)$,\\
+		где $\mu_U,\mu_V$ -- центры соответствующих кластеров.\\
+		Иначе $R$ сохраняет метрику пространства.
+	\end{definition}
+	Свойство растяжения способствует <<разрежеванию>> верхних уровней дендрограммы, что упрощает выбор числа кластеров.
+
+	\vspace{.5cm}
+	$R^n$ -- сжимающее;
+
+	$R^l$, $R^w$ -- растягивающие;
+
+	$R^g$, $R^c$ -- сохраняют метрику пространства.
+\end{frame}
+
+\begin{frame}{Быстрый (редуктивный) алгоритм Ланса--Уильямса}
+	\begin{enumerate}
+		\item $C_1=\left\{\{x_1\},\dots,\{x_l\}\right\}$; $R_1=0$;\\
+		$\forall i\not=j$ вычислить $R\left(\{x_i\},\{x_j\}\right)$;
+		\item \textcolor{red}{выбрать начальное значение параметра $\delta$;\\
+		построить $P(\delta)=\{(U,V)|U,V\in C_1,R(U,V)\le\delta\};$}
+		\item\textcolor{blue}{для всех} $t=2, \dots, l$
+		\item\hspace{.5cm}\textcolor{red}{если $P(\delta) = \varnothing$, то увеличить $\delta$ так, чтобы $P(\delta) \not= \varnothing$;}
+		\item\hspace{.5cm}$\displaystyle(U,V)=\argmin_{(U,V)\textcolor{red}{\in P(\delta)}}R(U,V);$\\
+		\hspace{.5cm}$R_t=R(U,V);$
+		\item\hspace{.5cm}$W=U\cup V;$\\
+			\hspace{.5cm}$C_t = C_{t-1} \cup W \setminus \{U,V\}$; \textcolor{red}{$P(\delta) = P(\delta) \setminus (U,V)$;}
+		\item\hspace{.5cm}\textcolor{blue}{для всех} $S\in C_t\setminus W$
+		\item\hspace{1cm}вычислить $R(W,S)$ по формуле Ланса--Уильямса;
+		\item\hspace{1cm}\textcolor{red}{если $R(W,S)\le\delta$, то $P(\delta)=p(\delta)\cup(W,S)$;}
+	\end{enumerate}
+\end{frame}
+
+\begin{frame}{Применимость быстрого алгоритма}
+	\begin{theorem}
+		Если функция расстояния между кластерами $R$ является редуктивной, то быстрый алгоритм приводит к той же кластеризации, что и исходный алгоритм.
+	\end{theorem}
+
+	\begin{theorem}[Диде и Моро, 1984]
+		Функция расстояния между кластерами $R$ редуктивная, если:
+		\[\alpha_U\ge0,\,\alpha_V\ge0,\,\alpha_U+\alpha_V+\min(\beta,0)\ge1,\,\min(\alpha_U,\alpha_V)+\gamma\ge0.\]
+	\end{theorem}
+
+	\vspace{0.25cm}
+	\mbox{Определение свойства редуктивности опустим за ненадобностью.}
+
+	\vspace{0.5cm}
+	$R^c$ -- не редуктивная; $R^n,\,R^l,\,R^g,\,R^w$ -- редуктивные.
+\end{frame}
+
+\begin{frame}{Рекомендации и выводы}
+
+	{\bf Стратегия выбора параметра $\delta$:}
+	\begin{enumerate}
+		\item Если $|C_t|\le n_1$, то $P(\delta)=\{(U,V)|U,V\in C_t\};$
+		\item иначе выбрать $n_2$ случайных расстояний $R(U,V)$;\\
+		назначить $\delta$ минимальным из них;
+	\end{enumerate}
+	\begin{itemize}
+		\item $n_1$, $n_2$ влияют только на скорость, но не на результат кластеризации; можно положить $n_1=n_2=20$.
+	\end{itemize}
+
+	\pause
+	{\bf Общие рекомендации по иерархической кластеризации:}
+	\begin{itemize}
+		\item лучше пользоваться $R^w$ -- расстоянием Уорда;
+		\item лучше пользоваться быстрым алгоритмом;
+		\item определять число кластеров по максимуму $|R_{t+1}-R_t|$, тогда итоговое число кластеров $=|C_t|$.
+	\end{itemize}
+\end{frame}
+
+\begin{frame}{Самоорганизующаяся карта Кохонена}
+	
+	$X$, $\rho:\,X \times X$ -- метрика пространства объектов;
+
+	\vspace{.25cm}
+	$Y=\{1,\dots,M\} \times \{1,\dots,H\}$ -- сетка кластеров,\\
+	$r: \, Y \times Y$ -- метрика пространства кластеров;
+
+	\vspace{.25cm}
+	Каждому узлу $(m,h)$ приписан нейрон Кохонена $w_{mh}\in X$;
+
+	\vspace{.25cm}
+	Заданы неотрицательные невозрастающие функции $K(r(\cdot,\cdot),t)$~(расстояния), $\eta(t)$~(скорости обучения), $\epsilon(t)$~(окрестности), где $t$ -- номер итерации;
+
+	\vspace{.25cm}
+	$\upsilon_{\epsilon(t)}(m_i,h_i)$ -- $\epsilon(t)$-окрестность $(m_i,h_i)$ в метрике $r$:
+
+	\begin{figure}
+	\includegraphics[width=0.4\textwidth]{karta.pdf}
+	\end{figure}
+\end{frame}
+
+\begin{frame}{Самоорганизующаяся карта Кохонена}
+	
+	\begin{enumerate}
+	\item задать начальные $w_{mh}$, $m=\overline{1:M}$, $h=\overline{1:H}$;
+
+	\item \textcolor{blue}{повторять}
+
+	\item\hspace{.5cm} выбрать случайным образом $x_i$ из $X^l$;
+
+	\item\hspace{.5cm} вычислить координаты ближайшего кластера:
+	\[(m_i,h_i)=\argmin_{(m,h)\in Y}\rho(x_i,w_{mh});\]
+
+	\item\hspace{.5cm} \textcolor{blue}{для всех} $(m,h)\in\upsilon_{\epsilon}(m_i,h_i)$
+
+	\item\hspace{1cm} сделать шаг стохастического градиентного спуска:
+	\[w_{mh}=w_{mh}+\eta(t)(x_i-w_{mh})K\left(r( (m_i,h_i),(m,h) )), t\right);\]
+
+	\item \textcolor{blue}{пока} кластеризация не стабилизируется;
+
+	\end{enumerate}
+\end{frame}
+
+\begin{frame}{Интерпретация карт Кохонена}
+	
+	Два типа графиков -- цветных карт $M\times H$:
+	\begin{itemize}
+		\item Цвет узла $(m,h)$ -- локальная плотность в точке $(m,h)$ -- среднее расстояние до $k$ ближайших точек выборки;
+
+		\item По одной карте на каждый признак:\\
+		цвет узла $(m,h)$ -- значение $j$-й компоненты вектора $w_{mh}.$
+	\end{itemize}
+
+	\vspace{.25cm}
+	\begin{figure}
+		\includegraphics[width=1\linewidth]{koh.pdf}
+	\end{figure}
+\end{frame}
+
+\begin{frame}{Рекомендации по выбору параметров}
+	\textbf{Инициализация $w_{mh}$:}
+	\begin{itemize}
+		\item случайными значениями;
+
+		\vspace{.2cm}
+		\item случайно выбранными $x_i$;
+
+		\vspace{.2cm}
+		\item Линейная инициализация: наложить сетку $Y$ на плоскость первых двух главных компонент, тогда $w_{mh}$ присвоить соответствующие вектора и исходного пространства $X$.
+	\end{itemize}
+
+	\pause
+	\vspace{.5cm}
+	\textbf{Задание функций:}
+	\begin{itemize}
+		\item $\epsilon(t)=\sigma(t)$, где $\sigma(t)$ -- Гауссова функция.
+
+		\item $K(r(\cdot,\cdot),t)=e^{-\frac{r(\cdot,\cdot)}{2\sigma(t)}}$ или 
+		$\left\{\begin{array}{ll}
+			const, & r(\cdot,\cdot)<\sigma(t);\\
+			0, & \text{иначе};
+		\end{array}\right.$
+
+		\item $\eta(t)=At+B$ или $\frac{A}{t+B}$, $A$, $B$ $=const$; 
+	\end{itemize}
+\end{frame}
+
+\begin{frame}{Достоинства и недостатки карт Кохонена}
+
+	\textbf{Достоиства:}
+	\begin{itemize}
+		\item Возможность визуального анализа многомерных данных.
+	\end{itemize}
+
+	\vspace{.5cm}
+	\textbf{Недостатки:}
+	\begin{itemize}
+		\item {\bf Субъективность.} Карта зависит не только от кластерной структуры данных, но и$\dots$
+		\begin{enumerate}[---]
+			\item от свойств функций $K$, $\eta$, $\epsilon$;
+
+			\item от начальных значений $w_{mh}$;
+
+			\item от случайного выбора $x_i$ в ходе итераций.
+		\end{enumerate}
+
+		\item {\bf Искажения.} Близкие объекты исходного пространства могут переходить в далекие точки на карте, и наоборот.
+	\end{itemize}
+
+	\vspace{.5cm}
+	{\bf Рекомедуется} только для разведочного анализа данных.
+\end{frame}
+% 
+% \begin{frame}{бикластеризация}
+% 	что-то
+% \end{frame}
+
+%
+% \begin{frame}
+% 	\frametitle{Примеры полученных графиков}
+% 	\begin{figure}
+% 		\subfigure{
+% 			\includegraphics[trim = 50 0 0 0, width=0.5\textwidth]{my_norm.pdf}
+% 			\includegraphics[trim = 0 0 50 0, width=0.5\textwidth]{my_norm_new.pdf} 
+% 		}
+% 	\end{figure}
+% \end{frame}
+% %
+% \begin{frame}
+% 	\frametitle{Примеры полученных графиков}
+% 	\begin{figure}
+% 		\subfigure{
+% 			\includegraphics[trim = 50 0 0 0, width=0.5\textwidth]{my_cauchy_new.pdf}
+% 			\includegraphics[trim = 0 0 50 0, width=0.5\textwidth]{my_fisher9.pdf} 
+% 		}
+% 	\end{figure}
+% \end{frame}
+% %
+% \begin{frame}
+% 	\frametitle{Примеры полученных графиков}
+% 	\begin{figure}
+% 		\subfigure{
+% 			\includegraphics[trim = 50 0 0 0, width=0.5\textwidth]{my_student5.pdf}
+% 			\includegraphics[trim = 0 0 50 0, width=0.5\textwidth]{my_student6.pdf} 
+% 		}
+% 	\end{figure}
+% \end{frame}
+%
+% \begin{frame}
+% 	\frametitle{Итоги}
+% 	\begin{itemize}
+% 		\item В большинстве случаев перестановочный тест $K_6$ оказался мощнее $K_1$, $K_4$, $K_5$ и неперестановочных тестов.
+% 		\vspace{0.5cm}
+% 		\item В некоторых случаях, тесты Колмогорова-Смирнова и Манна-Уитни оказались значительно мощнее перестановочных.
+% 		\vspace{0.5cm}
+% 		\item В некоторых случаях только перестановочный тест $K_6$ смог найти различия между распределениями.
+% 		\vspace{0.5cm}
+% 		\item Особенно велико преимущество теста $K_6$, если центры сравниваемых распределений совпадают.
+% 	\end{itemize}
+% \end{frame}
+%
+\end{document}

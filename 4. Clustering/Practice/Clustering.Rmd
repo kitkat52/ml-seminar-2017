@@ -1,0 +1,465 @@
+---
+title: "Разделение смеси распределений. Кластеризация"
+author: Ширинкина Дарья, Сальников Дмитрий, 622гр.
+output: 
+  html_document:
+    toc: yes
+    toc_float: yes
+---
+
+```{r, warning=FALSE, message=FALSE}
+library(rattle.data)
+library(ggfortify)
+library(psych)
+library(cluster)
+library(kohonen)
+library(mclust)
+library(class)
+```
+
+Данные **wine** из пакета **rattle.data**.
+
+1. Type -  The type of wine, into one of three classes, 1 (59 obs), 2(71 obs), and 3 (48 obs) (тип вина)
+2. Alcohol - Alcohol (содержание алкоголя)
+3. Malic - Malic acid (содержание яблочной кислоты)
+4. Ash - Ash
+5. Alcalinity - Alcalinity of ash (содержание щелочи)
+6. Magnesium - Magnesium (содержание магния)
+7. Phenols - Total phenols (общее число фенолов)
+8. Flavanoids - Flavanoids (флавоноиды)
+9. Nonflavanoids - Nonflavanoid phenols (не флавоноидные фенолы)
+10. Proanthocyanins - Proanthocyanins (проантоцианидиныы)
+11. Color - Color intensity (интенсивность цвета)
+12. Hue - Hue (оттенок вина)
+13. Dilution - D280/OD315 of diluted wines (разбавленность вина)
+14. Proline - Proline (сорт вина)
+
+## PCA
+
+```{r}
+head(wine)
+```
+
+```{r,echo=FALSE, eval=FALSE}
+pairs.panels(wine, ellipses = FALSE,bg=c("red","blue", "green")[wine$Type],pch=21+as.numeric(wine$Type),lwd = TRUE)
+```
+
+```{r}
+wine.pca <- prcomp(x = wine[, -1], center = TRUE, scale. = TRUE)
+
+scree(wine[, -1],factors = FALSE)
+wine.pca$rotation[, 1:4]
+
+summary(wine.pca)
+```
+
+Данные в двух первых компонентах.
+```{r}
+
+autoplot(wine.pca, data = wine, colour = 'Type',
+         loadings = TRUE, loadings.colour = 'blue',
+         loadings.label = TRUE, loadings.label.size = 3)
+
+autoplot(wine.pca, data = wine, colour = 'Type')
+
+
+```
+
+
+```{r}
+wine.pca.data <- wine.pca$x
+```
+
+
+## EM-алгоритм
+
+Применим EM-алгоритм. Будем предполагать смесь нормальных распределений.
+```{r}
+wine.mclust <- Mclust(wine.pca.data)
+BIC <- mclustBIC(wine.pca.data)
+```
+
+Нет четкого максимума BIC критерия, много близких значений.
+```{r}
+plot(BIC, legendArgs = list(cex=0.8))
+summary(BIC)
+summary(wine.mclust, parameters = FALSE)
+```
+
+Максимум BIC достигается для 4 кластеров модели VEI.
+```{r}
+plot(wine.mclust, what = "classification", dimens = 1:2)
+```
+
+Три наибольшие значения BIC имеют модель VEI для 3, 4 и 6 кластеров. Эти значения не сильно отличаются. Посмотрим на модель VEI для 3 кластеров, так как для этой модели будет меньше всего параметров. 
+```{r}
+wine.mclust <- Mclust(wine.pca.data, G = 3)
+summary(wine.mclust, parameters = FALSE)
+```
+
+
+```{r}
+plot(wine.mclust, what = "classification", dimens = 1:2)
+```
+
+Таблица правильных и ошибочных предсказаний в сравнении со значениями признака Type.
+```{r}
+tb <- table(wine$Type, wine.mclust$classification)
+print(tb)
+```
+
+```{r}
+mean(diag(prop.table(tb, 1)))
+```
+
+
+## Алгоритм k-средних
+
+Функция **kmeans**:
+
+* x - данные
+* centers - количество кластеров или набор центров кластеров
+* iter.max - максимальное число итераций
+
+Предположим, что наши данные делятся на две группы.
+
+```{r}
+set.seed(4)
+wine.km.two <- kmeans(wine.pca.data, centers = 2)
+```
+
+Результат kmeans в проекции на первые два главные направления.
+```{r}
+ggplot(cbind(wine.pca.data, wine.km.two$cluster), aes(PC1, PC2, colour = as.factor(wine.km.two$cluster))) + geom_point() + scale_color_manual(values = c("red","blue"), name = "Type") 
+```
+
+Центры признаков для двух групп, найденных kmeans.
+```{r}
+wine.km.two$centers
+```
+
+
+Разделим данные на 3 группы.
+```{r}
+wine.km.three <- kmeans(wine.pca.data, centers = 3)
+```
+
+Результат kmeans в проекции на первые два главные направления.
+```{r}
+ggplot(cbind(wine.pca.data, wine.km.three$cluster), aes(PC1, PC2, colour = as.factor(wine.km.three$cluster))) + geom_point() + scale_color_manual(values = c("red","blue", "green"), name = "Type") 
+```
+
+Центры признаков трех типов вина.
+```{r}
+aggregate(wine.pca.data, by = list(Type = wine$Type), FUN = mean)
+```
+
+
+Центры признаков для трех групп, найденных kmeans.
+```{r}
+wine.km.three$centers
+```
+
+Таблица правильных и ошибочных предсказаний в сравнении со значениями признака Type.
+```{r}
+tb <- table(wine$Type, wine.km.three$cluster)
+print(tb)
+```
+```{r}
+mean(diag(prop.table(tb, 1)))
+```
+
+
+
+## Нечткий алгоритм k-средних
+
+$U = \{U_{ij}\}$ --- матрица нечеткого разбиения, $U_{ij} \in [0,1]$, $i \in 1:n$, $j \in 1:k$.
+
+В матрице $U$ $i$-ая строчка содержит степень принадлежности $(x_{i1}, \ldots ,x_{ip})$ к кластерам $C_1, \ldots , C_k$.
+
+<!-- Также должны выполняться условия: -->
+
+<!-- * $\sum_{j\in 1:k}\mu_{ij} = 1$, $i \in 1:n$, т.е. каждый объект должен быть распределён между всеми кластерами; -->
+<!-- * $0 < \sum_{i \in 1:n}\mu_{ij} < n$, $j \in 1:k$, т.е. ни один кластер не должен быть пустым или содержать все элементы. -->
+
+Критерий разброса:
+
+\[\sum_{i \in 1:n}\sum_{j \in 1:k} U_{ij}^m\rho(X_i,\mu_j)^2,\]
+где $X_i = (x_{i1}, \ldots ,x_{ip})$, $\mu_j$ --- центр $j$-го кластера, а $m\in (1,\infty)$ --- экспоненциальный вес, определяющий нечёткость, размытость кластеров.
+
+На первом шаге матрица $M$ генерируется случайным образом. Далее запускается итерационный процесс вычисления центров кластеров и пересчёта элементов матрицы степеней принадлежности.
+
+<!-- Вычисления продолжаются до тех пор, пока изменение матрицы $M$, характеризующееся величиной $||M - M^*||$, где $M^*$ --- матрица на предыдущей итерации, не станет меньше заранее заданного параметра остановки $\varepsilon$. -->
+
+__Выбор параметра $m$.__
+
+Чем больше значение $m$, тем матрица принадлежности более размазанная и при $m \leftarrow \infty$ элементы примут вид $\mu_{ij} = 1/k$, что является плохим решением, т.к. все объекты с одинаковой степенью распределены по всем кластерам. Теоретически обоснованного правила выбора веса пока не существует, и обычно устанавливают $m=2$. 
+
+Используем функцию **fanny**  из пакета **cluster**.
+
+* x - данные
+* k - количество кластеров
+* metric - метрика
+* memb.exp - параметр $m$
+
+```{r}
+wine.fuzzy.km.three <- fanny(wine.pca.data, k = 3, metric = "SqEuclidean", memb.exp = 2)
+```
+
+Результат нечеткого k-means в проекции на первые два главные направления.
+```{r}
+ggplot(cbind(wine.pca.data, wine.fuzzy.km.three$clustering), aes(PC1, PC2, colour = as.factor(wine.fuzzy.km.three$clustering))) + geom_point() + scale_color_manual(values = c("red", "blue", "green"), name = "Type") 
+```
+
+Таблица правильных и ошибочных предсказаний в сравнении со значениями признака Type. Результаты применения нечеткого k-means совпадают с результатами k-means.
+```{r}
+tb <- table(wine$Type, wine.fuzzy.km.three$clustering)
+print(tb)
+```
+
+
+
+```{r}
+mean(diag(prop.table(tb, 1)))
+```
+
+Элементы матрицы $U$ для трех кластеров. 
+```{r}
+n.observations <- nrow(wine)
+
+for(ind in 1:3) {
+  plot(1:n.observations, wine.fuzzy.km.three$membership[, ind], main = paste0("Membership to cluster ", ind))
+  lines(0:n.observations,rep(0.5,n.observations+1),col = "blue")
+}
+
+
+```
+
+Принадлежность к кластеру 2 в проекции на первые два главные направления.
+```{r}
+ggplot(cbind(wine.pca.data, wine.fuzzy.km.three$membership), aes(PC1, PC2, colour = wine.fuzzy.km.three$membership[, 2])) + geom_point() + scale_colour_gradient(low="lightblue", high = "black", name = "Membership") 
+```
+
+
+
+## Иерархическая кластеризация
+
+Используем функцию **hclust**.
+
+* d - матрица расстояний (результат функции dist)
+* method - межкластерное расстояние
+
+Будем использовать евклидову метрику.
+
+### Complete linkage
+
+Расстояние дальнего соседа $R^l(U, V) = max_{u \in U, v \in V} \rho(u,v)$.
+
+```{r}
+wine.dist <- dist(wine.pca.data, method = "euclidian")
+wine.h.fit <- hclust(wine.dist, method = "complete")
+```
+
+Дендограмма с разделением на 3 кластера.
+```{r}
+plot(wine.h.fit)
+
+rect.hclust(wine.h.fit, k=3, border="red") 
+
+wine.groups <- cutree(wine.h.fit, k = 3)
+```
+
+Таблица правильных и ошибочных предсказаний в сравнении со значениями признака Type. 
+```{r}
+tb <- table(wine$Type, wine.groups)
+print(tb)
+
+ggplot(cbind(wine.pca.data, wine.groups), aes(PC1, PC2, colour = as.factor(wine.groups))) + geom_point() + scale_color_manual(values = c("red", "blue", "green"), name = "Type") 
+
+```
+
+
+
+```{r}
+mean(diag(prop.table(tb, 1)))
+```
+
+### Ward distance
+
+Расстояние Уорда $R^w (U,V) = \frac{|U||V|}{|U| + |V|}R^c(U,V)$. При исполльзовании расстояния Уорда минимизируются внутригрупповые дисперсии. Хорошо использовать для объединения близко расположенных кластеров.
+
+```{r}
+wine.dist <- dist(wine.pca.data, method = "euclidian")
+wine.h.fit <- hclust(wine.dist, method = "ward.D")
+```
+
+Дендограмма с разделением на 3 кластера.
+```{r}
+plot(wine.h.fit)
+
+rect.hclust(wine.h.fit, k=3, border="red") 
+
+wine.groups <- cutree(wine.h.fit, k = 3)
+```
+
+Таблица правильных и ошибочных предсказаний в сравнении со значениями признака Type. При использовании расстояния Уорда количество ошибочных предсказаний сократилось.
+```{r}
+tb <- table(wine$Type, wine.groups)
+print(tb)
+
+ggplot(cbind(wine.pca.data, wine.groups), aes(PC1, PC2, colour = as.factor(wine.groups))) + geom_point() + scale_color_manual(values = c("red", "blue", "green"), name = "Type") 
+
+```
+
+
+
+
+```{r}
+mean(diag(prop.table(tb, 1)))
+```
+
+## Самоорганизующиеся карты Кохонена
+
+Пакет **kohonen** функция **som**.
+
+
+* grid: прямоугольная или шестиугольная сетка узлов, например, результат функции somgrid
+* rlen: количество раз, когда полный набор данных будет представлен в сети
+* alpha: скорость обучения, по умолчанию снижается линейно с 0.05 до 0.01
+
+
+Идея cамоорганизующихся карт Кохонена заключается в том, чтобы спроецировать все объекты выборки на плоскую карту: на множество узлов прямоугольной сетки заранее заданного размера (в нашем случае - это сетка grid).
+
+Каждый объект проецируется в какой-то узел сетки.Чтобы карта отражала кластерную структуру выборки, близкие объекты должны попадать в близкие узлы сетки.
+
+Посмотрим на карту Кохонена для двух явно выраженных кластеров. Смоделируем данные.
+
+```{r}
+library(MASS)
+set.seed(10)
+n1 <- 500
+n2 <- 400
+data.norm1 <- MASS::mvrnorm(n = n1, mu = c(1,5), Sigma = matrix(c(2,-0.5,1,2), nrow = 2))
+data.norm2 <- MASS::mvrnorm(n = n2, mu = c(4,-5), Sigma = matrix(c(1,0.5,-0.5,2), nrow = 2))
+
+data.two.clust <- as.data.frame(rbind(data.norm1, data.norm2))
+data.two.clust$group <- as.factor(c(rep(1, n1), rep(2, n2)))
+
+ggplot(data.two.clust, aes(data.two.clust[,1], data.two.clust[,2], colour = data.two.clust$group)) + geom_point()
+
+
+som.grid <- kohonen::somgrid(xdim = 6, ydim=6, topo="hexagonal")
+
+som.model <- kohonen::som(scale(data.two.clust[, -3]), 
+ grid=som.grid, 
+ rlen=500,
+ alpha=c(0.05,0.01),
+ keep.data = TRUE)
+
+```
+
+
+На графике "Counts plot" для каждого узла отображено количество индивидов, попавших в этот узел. В левой и правой части картинки можно наблюдать группы узлов, окрашенных в красный цвет (в эти узлы попало около 40 индивидов). Между этими группами преобладают узлы с синим и зеленым цветом, то есть узлы, в которые попало не так много индивидов.
+```{r}
+colors <- function(n, alpha = 1) {
+    rev(heat.colors(n, alpha))
+}
+
+coolBlueHotRed <- function(n, alpha = 1) {
+    rainbow(n, end = 4/6, alpha = alpha)[n:1] 
+}
+plot(som.model, type = "counts", palette.name = coolBlueHotRed, heatkey = TRUE)
+```
+
+
+Распределение индивидов по узлам без цветовой дифференциации.
+```{r}
+plot(som.model, type = "mapping", pchs = 20, main = "Mapping Type SOM")
+
+
+```
+
+Расстояние между каждым узлом и его соседями (двухцветная полутоновая карта). Более светлый цвет отображает группы узлов, которые значительно отличаются друг от друга. По середине карты располгается группа узлов более светлого оттенка, тогда как в левой и правой части находятся более яркие узлы. По этой карте можно выделить два кластера в исходных данных.
+
+```{r}
+plot(som.model, type = "dist.neighbours")
+
+```
+
+Распределение по решетке соотношение долей участия отдельных исходных переменных. На этой карте отображаются итоговые значения $\omega_{mh}$. Каждый цвет соответствует $j$-ой компоненте вектора $\omega_{mh}$.
+```{r}
+plot(som.model, type = "codes")
+```
+
+Эту же информацию можно отобразить отдельно для каждого признака. Построим долю участия первых четырех главных компонент. Видим, что для одного кластера соответсвуют повышенные значения первого признака, а для другого кластера - повышенные значения второго признака.
+
+```{r}
+for (i in 1:2) {
+  plot(som.model, type = "property", 
+       property = som.model$codes[[1]][,i], 
+       main = colnames(som.model$codes[[1]])[i],
+       palette.name = coolBlueHotRed)  
+}
+
+```
+
+
+Построим карту Кохонена для данных **wine**.
+
+```{r}
+set.seed(20)
+som.grid <- kohonen::somgrid(xdim = 6, ydim=6, topo="hexagonal")
+
+som.model <- kohonen::som(scale(wine.pca.data), 
+ grid=som.grid, 
+ rlen=500,
+ alpha=c(0.05,0.01),
+ keep.data = TRUE)
+
+
+```
+
+
+На графике "Counts plot" для каждого узла отображено количество индивидов, попавших в этот узел. На карте можно заметить два места скопления точек (красные узлы), между которыми находятся узлы с небольшим количеством точек. Также в правой части карты находится узел желтоватого цвета, который имеет большее скопление точек, чем другие окружающие его узлы.
+```{r}
+colors <- function(n, alpha = 1) {
+    rev(heat.colors(n, alpha))
+}
+
+coolBlueHotRed <- function(n, alpha = 1) {
+    rainbow(n, end = 4/6, alpha = alpha)[n:1] 
+}
+plot(som.model, type = "counts", palette.name = coolBlueHotRed, heatkey = TRUE)
+```
+
+Распределение индивидов по узлам.
+```{r}
+plot(som.model, type = "mapping", pchs = 20, main = "Mapping Type SOM")
+
+
+```
+
+Расстояние между каждым узлом и его соседями. В левом нижнем углу карты выделяется группа узлов, которая окружена узлами более светлого цвета, эту группу можно выделить в отдельный кластер. Граница между скоплениями в левом верхнем и правом нижнем углах карты размыта.
+
+```{r}
+plot(som.model, type = "dist.neighbours")
+
+```
+
+Распределение по решетке соотношение долей участия отдельных исходных переменных. Так как у нас участвует много признаков, то сложно интерпретировать такую карту.
+```{r}
+plot(som.model, type = "codes")
+```
+
+Нарисуем для первых четырех глвных компонент долю участия. Для кластера, находящегося в нижнем правом углу карту, соответсвуют повышенные значения первой главной компоненты.
+
+```{r}
+for (i in 1:4) {
+  plot(som.model, type = "property", 
+       property = som.model$codes[[1]][,i], 
+       main = colnames(som.model$codes[[1]])[i],
+       palette.name = coolBlueHotRed)  
+}
+
+```
+

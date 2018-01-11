@@ -168,7 +168,7 @@ ridge.pred <- predict(ridge.mod, s=bestlam, newx=x[test,])
 
 Ошибка на тестовой выборке.
 ```{r}
-mean(sqrt((ridge.pred - y.test)^2))
+sqrt(mean((ridge.pred - y.test)^2))
 ```
 
 Посмотрим на сами коэффициенты, они все ненулевые.
@@ -199,7 +199,7 @@ lasso.pred <- predict(lasso.mod, s=bestlam, newx=x[test ,])
 
 Ошибка на тестовой выборке.
 ```{r}
-mean(sqrt((lasso.pred - y.test)^2))
+sqrt(mean((lasso.pred - y.test)^2))
 ```
 
 Посмотрим на сами коэффициенты, много нулевых коэффициентов. 
@@ -211,8 +211,8 @@ predict(lasso.mod, type = 'coefficients',s=bestlam)[1:20,]
 ### Simple linear regression
 
 ```{r}
-lm.pred = predict(ridge.mod, s=0, newx=x[test,], exact=T)
-mean(sqrt((lm.pred - y.test)^2))
+lm.pred = predict(ridge.mod, s=0, newx=x[test,], exact=T, x=x[train,], y=y[train])
+sqrt(mean((lm.pred - y.test)^2))
 ```
 
 ### Модельный пример, когда Ridge regression лучше Lasso.
@@ -245,7 +245,7 @@ ridge.pred <- predict(ridge.mod, s=bestlam, newx=x[test ,])
 
 Ошибка на тестовой выборке.
 ```{r}
-mean(sqrt((ridge.pred - y.test)^2))
+sqrt(mean((ridge.pred - y.test)^2))
 ```
 
 ####Lasso
@@ -260,7 +260,7 @@ lasso.pred <- predict(lasso.mod, s=bestlam, newx=x[test ,])
 
 Ошибка на тестовой выборке.
 ```{r}
-mean(sqrt((lasso.pred - y.test)^2))
+sqrt(mean((lasso.pred - y.test)^2))
 ```
 
 
@@ -298,7 +298,7 @@ ridge.pred <- predict(ridge.mod, s=bestlam, newx=x[test ,])
 
 Ошибка на тестовой выборке.
 ```{r}
-mean(sqrt((ridge.pred - y.test)^2))
+sqrt(mean((ridge.pred - y.test)^2))
 ```
 
 ####Lasso
@@ -314,5 +314,5 @@ lasso.pred <- predict(lasso.mod, s=bestlam, newx=x[test ,])
 
 Ошибка на тестовой выборке.
 ```{r}
-mean(sqrt((lasso.pred - y.test)^2))
+sqrt(mean((lasso.pred - y.test)^2))
 ```

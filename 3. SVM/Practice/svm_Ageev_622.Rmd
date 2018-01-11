@@ -680,7 +680,7 @@ cv.out <- cv.glmnet(x.train,y.train,alpha =0)
 bestlam <- cv.out$lambda.min
 ridge.mod <- glmnet(x.train,y.train, alpha=0, lambda=bestlam, standardize=TRUE)
 ridge.pred <- predict(ridge.mod, s=bestlam, newx=x.test)
-mean(sqrt((ridge.pred - y.test)^2))
+sqrt(mean((ridge.pred - y.test)^2))
 ```
 
 Теперь построим SVR.
@@ -692,6 +692,6 @@ tune.linear.svr$best.model
 MSE
 ```{r}
 svr.linear.pred <- predict(tune.linear.svr$best.model, x.test)
-mean(sqrt((svr.linear.pred - y.test)^2))
+sqrt(mean((svr.linear.pred - y.test)^2))
 ```
 Получилось чуть лучше ridge regression.

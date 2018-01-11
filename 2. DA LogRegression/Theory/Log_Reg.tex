@@ -83,7 +83,7 @@
 
 Для построения байесовского классификатора, нам необходимо знать апостериорные вероятности $P(G \mid \boldsymbol{\xi} = \mathbf{x})$. Обозначим $p_k(\mathbf{x}) = P(\boldsymbol{\xi} = \mathbf{x} \mid \eta = G_k)$ условные плотности классов, $\pi_k = P(\eta = G_k)$ -- априорные вероятности, $\sum_{k = 1}^{K} \pi_k = 1$. По теореме Байеса получим
 \begin{align*}
-   P(G = k \mid X = x) = \frac{p_k(x) \pi_k}{\sum_{i = 1}^K p_i(x)\pi_l}.
+   P(G = k \mid X = x) = \frac{p_k(x) \pi_k}{\sum_{i = 1}^K p_i(x)\pi_i}.
 \end{align*}
 
 Возникает вопрос: откуда брать априорные вероятности?
@@ -247,7 +247,7 @@ t = \Lambda_{\ell}^{p} \sim \Lambda_{\nu_\mathbf{B} + (\ell - 1), \nu_\mathbf{W}
   \item Признаки, которые не влияют на качество разделения. Действуем аналогично пошаговой регрессии. Введем статистику
   \begin{multline*}
     (Partial \Lambda)_i = \Lambda(X_i \mid X_1, \ldots, X_{i - 1}, X_{i + 1}, \ldots, X_p) = \\
-    = \frac{\Lambda(X_1, \ldots, X_p)}{\Lambda(X_i \mid X_1, \ldots, X_{i - 1}, X_{i + 1}, \ldots, X_p)} = \frac{1}{1 + \lambda_i}.
+    = \frac{\Lambda(X_1, \ldots, X_p)}{\Lambda(X_i \mid X_1, \ldots, X_{i - 1}, X_{i + 1}, \ldots, X_p)}.
   \end{multline*}
   Гипотеза:
   \begin{align*}

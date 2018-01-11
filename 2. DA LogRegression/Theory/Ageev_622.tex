@@ -1,0 +1,538 @@
+\documentclass{beamer}
+\usetheme{Boadilla}
+\setbeamertemplate{navigation symbols}{}
+\usepackage[T2A]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[english,russian]{babel}
+\usepackage{indentfirst}
+\usepackage{amsfonts}
+\usepackage{amsmath}
+\usepackage{amsthm}
+\usepackage{bbold}
+\usepackage{moreverb}
+\usepackage{dsfont}
+\usepackage{graphicx}
+
+
+
+\title[LR и DA] % (optional, only for long titles)
+{Логистическая регрессия. Дискриминантный анализ. Отбор признаков.}
+\author[Агеев~В.А, 622 гр.] % (optional, for multiple authors)
+{Владимир Агеев, 622 гр.}
+\date{3 октября, 2017г.}
+
+\DeclareMathOperator*{\argmin}{arg\,min}
+\DeclareMathOperator*{\argmax}{arg\,max}
+
+
+\begin{document}
+
+\frame[plain]{\titlepage}
+  \begin{frame}
+    \frametitle{Задача классификации}
+    Дано:
+    \begin{itemize}
+      \item Множество объектов $X \in \mathbb{R}^p$;
+      \item Множество ответов $Y$, $Y_i \in \mathcal{G}$.
+    \end{itemize}
+
+\bigskip
+
+    Задача:
+    \begin{itemize}
+      \item По выборке $X^N = (\mathbf{x}_i, y_i)_{i = 1}^N$ построить классификатор $a: \mathbb{R}^p \rightarrow \mathcal{G}$, который по новому вектору признаков $X$ предскажет отметку класса, т.е. $a(\mathbf{x}) \in \mathcal{G}$;
+      \item На $a(\mathbf{x})$ должна достигаться минимальная ошибка классификации в некотором смысле;
+      \item Хотим знать вероятности принадлежности объекта к тому или иному классу.
+    \end{itemize}
+  \end{frame}
+
+  \begin{frame}
+    \frametitle{Задача классификации}
+    На генеральном языке:
+    \begin{itemize}
+      \item $\boldsymbol{\xi} \in \mathbb{R}^p$ -- случайный вектор признаков;
+      \item $\eta \in \mathcal{G} = \{G_k\}_{k = 1}^K$ -- дискретная случайная величина, класс;
+      \item $P(\boldsymbol{\xi}, \eta)$ -- их совместное распределение.
+    \end{itemize}
+    \bigskip
+    Дано: выборка $(\mathbf{x}_i, y_i)_{i = 1}^N$ -- $N$ реализаций случайных векторов $(\boldsymbol{\xi}, \eta)$.
+
+    \bigskip
+    По выборке необходимо построить классифицирующую функцию
+    \begin{align*}
+      a: \mathbb{R}^p \rightarrow \mathcal{G}.
+    \end{align*}
+
+    \bigskip
+    Мера ошибки предсказания (функция потерь):
+    \begin{align*}
+      \mathbf{L} = (\lambda_{ij})_{i,j = 1}^K, ~K = card(\mathcal{G}), \lambda_{ij}~\text{-- цена ошибки}.
+    \end{align*}
+
+    \bigskip
+    Средний риск: $R(a) = \mathds{E}(\mathbf{L}(\eta, a(\boldsymbol{\xi})))$.
+
+    \bigskip
+    Задача: $R(a) \rightarrow \min\limits_a$.
+\end{frame}
+\begin{frame}
+\frametitle{Байесовский классификатор}
+Средний риск:
+\begin{align*}
+  R(a) = \mathds{E}(\mathbf{L}(\eta, a(\boldsymbol{\xi}))) = \mathds{E}_{\boldsymbol{\xi}} \sum_{k = 1}^{K} \mathbf{L}(G_k, a(\boldsymbol{\xi})) P(G_k \mid \boldsymbol{\xi}).
+\end{align*}
+
+Функция классификации:
+\begin{align*}
+  a(\mathbf{x}) = \argmin_{G \in \mathcal{G}} \sum_{k = 1}^{K} \mathbf{L}(G_k, G) P(G_k \mid  \boldsymbol{\xi} = \mathbf{x}).
+\end{align*}
+
+Подставим сюда 0-1 функцию потерь
+\begin{align*}
+  a(\mathbf{x}) = \argmin_{G \in \mathcal{G}} (1 - P(G \mid \boldsymbol{\xi} = \mathbf{x})).
+\end{align*}
+
+Равносильно
+\begin{align*}
+  a(\mathbf{x}) = \argmax_{G \in \mathcal{G}} P(G \mid \boldsymbol{\xi} = \mathbf{x}) = \argmax_{G \in \mathcal{G}} P(G)P(\boldsymbol{\xi} \mid \eta = G).
+\end{align*}
+Это решение называется байесовским классификатором.
+\end{frame}
+
+\begin{frame}
+  \frametitle{Дискриминантный анализ}
+
+  Для построения байесовского классификатора, необходимо знать апостериорные вероятности $P(G \mid \boldsymbol{\xi} = \mathbf{x})$. Обозначим
+  \begin{itemize}
+    \item  $p_k(\mathbf{x}) = P(\boldsymbol{\xi} = \mathbf{x} \mid \eta = G_k)$ условные плотности классов;
+    \item $\pi_k = P(\eta = G_k)$ -- априорные вероятности, $\sum_{k = 1}^{K} \pi_k = 1$.
+  \end{itemize}
+  \bigskip
+  По теореме Байеса
+  \begin{align*}
+     P(\eta = G_k \mid \boldsymbol{\xi} = \mathbf{x}) = \frac{p_k(\mathbf{x}) \pi_k}{\sum_{i = 1}^K p_i(\mathbf{x})\pi_i}.
+  \end{align*}
+
+  Возникает вопрос: откуда брать априорные вероятности?
+  \begin{itemize}
+    \item Брать равновероятные: $\pi_i = \frac{1}{K}$;
+    \item Брать пропорционально объемам классов $\pi_i = \frac{n_i}{N}$;
+    \item Соответственно имеющейся информации.
+  \end{itemize}
+\end{frame}
+\begin{frame}
+  \frametitle{Дискриминантный анализ}
+  \framesubtitle{QDA}
+  Предположим, что $P(\boldsymbol{\xi} \mid \eta = G_k) = \mathcal{N}_p(\mu_k, \Sigma_k)$, его плотность
+  \begin{align*}
+    p_k(\mathbf{x}) = \frac{1}{(2\pi)^{p/2} \lvert \Sigma_k \rvert^{1/2}} e^{-\frac{1}{2}(\mathbf{x} - \mu_k)^\mathrm{T} \Sigma_k^{-1}(\mathbf{x} - \mu_k)}.
+  \end{align*}
+  Подставим плотности в байесовский классификатор
+  \begin{multline*}
+    a(\mathbf{x}) = \argmax_{i \in 1 \ldots K} \pi_i p_i(\mathbf{x}) = \argmax_{i \in 1 \ldots K} \log(\pi_i p_i(\mathbf{x})) = \\
+    = \argmax_{i \in 1 \ldots K}(-\frac{1}{2}(\mathbf{x} - \mu_i)^\mathrm{T} \Sigma_i^{-1}(\mathbf{x} - \mu_i) - \frac{1}{2}\log(\lvert \Sigma_i \rvert) + \log(\pi_i)) = \\= \argmax_{i \in 1 \ldots K} g_i(\mathbf{x}).
+  \end{multline*}
+  Заметим, что получившийся классификатор квадратично зависит от $\mathbf{x}$, отсюда название quadratic discriminant analysis.
+\end{frame}
+
+\begin{frame}
+  \frametitle{Дискриминантный анализ}
+  \framesubtitle{LDA}
+  Пусть распределения классов $P(\boldsymbol{\xi} \mid \eta = G_k) = \mathcal{N}_p(\mu_k, \Sigma)$.
+
+  Упростим классификатор:
+  \begin{multline*}
+    a(\mathbf{x})
+    = \argmax_{i \in 1 \ldots K}(-\frac{1}{2}(\mathbf{x} - \mu_i)^\mathrm{T} \Sigma^{-1}(\mathbf{x} - \mu_i) - \frac{1}{2}\log(\lvert \Sigma \rvert) + \log(\pi_i)) = \\
+    = \argmax_{i \in 1 \ldots K}(-\frac{1}{2} \mu_i^\mathrm{T} \Sigma^{-1}\mu_i + \mu_i^\mathrm{T} \Sigma^{-1}\mathbf{x} + \log(\pi_i)) =  \argmax_{i \in 1 \ldots K} \delta_i(\mathbf{x}).
+  \end{multline*}
+  Зависимость от $\mathbf{x}$ линейна.
+
+  Разделяющая два класса гиперплоскость:
+  \begin{multline*}
+    \{\mathbf{x} : \delta_i(\mathbf{x}) = \delta_j(\mathbf{x})\} =\\ = \{\mathbf{x} : -\frac{1}{2} (\mu_i - \mu_j)^\mathrm{T} \Sigma^{-1}(\mu_i + \mu_j) + (\mu_i - \mu_j)^\mathrm{T} \Sigma^{-1}\mathbf{x} + \log(\pi_i/\pi_j) = 0\}.
+  \end{multline*}
+  От соотношения между априорными вероятностями зависит положение границы относительно классов (к какому она ближе).
+\end{frame}
+\begin{frame}
+  \frametitle{Дискриминантный анализ}
+  \framesubtitle{Оценка параметров}
+  ОМП параметров нормальных плотностей:
+
+  \begin{itemize}
+    \item Среднее \begin{align*}
+    \widehat{\mu}_i = \frac{1}{n_i}\sum\limits_{j: y_j = G_i} \mathbf{x}_j;
+    \end{align*}
+    \item Ковариационная матрица класса
+    \begin{align*}
+      \widehat{\Sigma}_i = \frac{1}{n_i - 1}\sum_{j: y_j = G_i} (\mathbf{x}_j - \widehat{\mu}_i)^\mathrm{T}(\mathbf{x}_j - \widehat{\mu}_i);
+    \end{align*}
+    \item Pooled ковариационная матрица
+    \begin{align*}
+      \widehat{\Sigma}= \sum\limits_{j = 1}^K\frac{n_i - 1}{N - K} \widehat{\Sigma}_i.
+    \end{align*}
+  \end{itemize}
+\end{frame}
+\begin{frame}
+  \frametitle{Дискриминантный анализ}
+  \framesubtitle{Возвращение к вероятностям}
+  Если нам необходимо получить вероятности отношения $\mathbf{x}$ к классу $i$, то, вычислив $\widehat{\delta}_i(\mathbf{x})$, можно вычислить
+  \begin{align*}
+    \widehat{P}(\eta = G_i \mid \boldsymbol{\xi} = \mathbf{x}) = \frac{e^{\widehat{\delta}_i(\mathbf{x})}}{\sum\limits_{j = 1}^K e^{\widehat{\delta}_j(\mathbf{x})}},
+  \end{align*}
+  подставив оценки $\pi_i \widehat{p_i(\mathbf{x})}$ в формулу байеса для $ P(\eta = G_k \mid \boldsymbol{\xi} = \mathbf{x})$. Далее относим $\mathbf{x}$ к тому классу, для которого оценка максимальна.
+\end{frame}
+\begin{frame}
+  \frametitle{Дискриминантный анализ}
+  \framesubtitle{Regularized Discriminant Analysis}
+  Компромис между LDA и QDA.
+  \begin{itemize}
+    \item Regularized Discriminant Analysis. Рассматривается матрица
+    \begin{align*}
+       \widehat{\Sigma}_i(\alpha) = \alpha \widehat{\Sigma}_i + (1 - \alpha)\widehat{\Sigma},
+    \end{align*}
+    где $\widehat{\Sigma}$ -- pooled ковариационая матрица. Здесь $\alpha \in [0, 1]$ порождает континуум моделей между LDA и QDA, выбирается скользящим контролем.
+    \bigskip
+    \item  Модифицируем pooled ковариационную матрицу и рассмотрим
+    \begin{align*}
+       \widehat{\Sigma}(\gamma) = \gamma \widehat{\Sigma} + (1 - \gamma)\sigma^2 \mathbf{I}_p,
+    \end{align*}
+    где $\gamma$ определяет вид ковариационной матрицы и выбирается скользящим контролем.
+  \end{itemize}
+
+Пришли к выбору ковариационных матриц $\widehat{\Sigma}_i(\alpha, \gamma)$ скользящим контролем.
+\end{frame}
+\begin{frame}
+  \frametitle{Дискриминантный анализ}
+  \framesubtitle{Проблемы с ковариационной матрицей}
+  Матрица $\widehat{\Sigma}_i$  окажется вырожденной если признаки линейно зависимы, и может оказаться плохо обусловлена.
+
+  Cпособы разрешения этой проблемы:
+  \begin{itemize}
+    \item Регуляризация ковариационной матрицы. Предлагается обращать
+    \begin{align*}
+       \widehat{\Sigma}_i + \tau \mathbf{I}_p,
+    \end{align*}
+     где $\tau$ выбрано по скользящему контролю.
+    \item Нормальный наивный байесовский классификатор. Пусть
+    \begin{align*}
+      p_i(x) = \prod_{j = 1}^p p_{ij}(x_j), \quad p_{ij}(x_j) = \frac{1}{\sqrt{2\pi}\sigma_{ij}}e^{-\frac{(x_j - \mu_{ij})^2}{2\sigma^2_{ij}}}.
+    \end{align*}
+    Классифицирующая функция:
+    \begin{align*}
+      \delta_i(x) = -\frac{1}{2}\sum_{j = 1}^p\frac{(x_j - \mu_{ij})^2}{2\sigma^2_{ij}} + \log(\pi_i).
+    \end{align*}
+  \end{itemize}
+\end{frame}
+\begin{frame}
+\frametitle{Дискриминантный анализ}
+\framesubtitle{Канонические переменные}
+Пусть $\zeta = A\boldsymbol{\xi}$, тогда $P(\zeta \mid \eta = G_k) = \mathcal{N}_p(A^\mathrm{T}\mu_k, A^\mathrm{T}\Sigma_kA)$.
+
+На выборочном языке: $Z =A^\mathrm{T}\mathbf{X}$.
+
+Выборочная дисперсия $Z$ имеет вид
+\begin{align*}
+A^\mathrm{T}\mathbf{T}A = A^\mathrm{T}(\mathbf{W} + \mathbf{B})A = A^\mathrm{T}\mathbf{W}A + A^\mathrm{T}\mathbf{B}A,
+\end{align*}
+где
+\begin{itemize}
+  \item $\mathbf{T}$ -- total covariance matrix $\mathbf{X}$,
+  \item первое слагаемое -- оценка внутригрупповых отклонений,
+  \item второе слагаемое -- оценка межгрупповых отклонений.
+\end{itemize}
+\end{frame}
+\begin{frame}
+  \frametitle{Дискриминантный анализ}
+  \framesubtitle{Канонические переменные}
+  Выборочная дисперсия $Z$ имеет вид
+  \begin{align*}
+  A^\mathrm{T}\mathbf{T}A = A^\mathrm{T}(\mathbf{W} + \mathbf{B})A = A^\mathrm{T}\mathbf{W}A + A^\mathrm{T}\mathbf{B}A,
+  \end{align*}
+
+  Обобщенная задача на собственные числа и собственные вектора:
+  \begin{align*}
+    \frac{A^\mathrm{T}\mathbf{B}A}{A^\mathrm{T}\mathbf{W}A} \rightarrow \max_{A}.
+  \end{align*}
+
+  Путь $\lambda_1 \geq \lambda_2 \geq \ldots \geq \lambda_d$ -- собственные числа $\mathbf{B}^{-1}\mathbf{W}$, а $A_1, \ldots, A_d$ -- собственные вектора. Причем $A^\mathrm{T}_i \mathbf{W}A_j = 0$. Максимум равен $\lambda_1$  и достигается на $A_1$.
+  \begin{align*}
+    \max_{A, A \bot A_1}\frac{A^\mathrm{T}\mathbf{B}A}{A^\mathrm{T}\mathbf{W}A} = \lambda_2
+  \end{align*}
+  достигается на $A_2$ и так далее.
+
+  Вектора $A_i$ -- канонические коэффициенты, новые признаки $Z_i$ -- канонические переменные, $Z_i$ ортогональны в обычном смысле.
+\end{frame}
+\begin{frame}
+  \frametitle{Дискриминантный анализ}
+  \framesubtitle{Значимость канонических переменных}
+  Сколько канонических переменных нам окажется достаточно взять?
+  \begin{align*}
+    H_0: A_i, i = \ell,\ldots,d~\text{не описывают отличия}.
+  \end{align*}
+  Введем статистику $\Lambda-prime$:
+  \begin{align*}
+  \Lambda_\ell^p = \prod_{i = l}^d \frac{1}{1 + \lambda_i}.
+  \end{align*}
+  Тогда гипотезу выше можно переформулировать так
+  \begin{align*}
+  H_0: \Lambda_\ell^p = 1 \Leftrightarrow \lambda_\ell = \ldots = \lambda_d = 0 \Leftrightarrow rank \mathbf{B} = \ell - 1.
+  \end{align*}
+
+  Критерий:
+  \begin{align*}
+  t = \Lambda_{\ell}^{p} \sim \Lambda_{\nu_\mathbf{B} + (\ell - 1), \nu_\mathbf{W} - (\ell - 1)}.
+  \end{align*}
+\end{frame}
+\begin{frame}
+\frametitle{Дискриминантный анализ}
+\framesubtitle{Последовательный дискриминантный анализ}
+Какие признаки следует исключить?
+  \begin{itemize}
+    \item Имеют большой коэффициент множественной корреляции $\mathbf{R}^2 = \mathbf{R}^2_{pooled}(\xi_i;\{\xi_j \mid j \neq i\})$;
+    \item Не влияют на качество разделения. Введем статистику
+    \begin{multline*}
+      (Partial \Lambda)_i = \Lambda(X_i \mid X_1, \ldots, X_{i - 1}, X_{i + 1}, \ldots, X_p) = \\
+      = \frac{\Lambda(X_1, \ldots, X_p)}{\Lambda(X_i \mid X_1, \ldots, X_{i - 1}, X_{i + 1}, \ldots, X_p)}.
+    \end{multline*}
+    Гипотеза:
+    \begin{align*}
+      H_0 : (Partial \Lambda)_i = 1.
+    \end{align*}
+
+    Критерий:
+    \begin{align*}
+      F_i = \frac{1 - (Partial \Lambda)_i / \nu_\mathbf{B}}{(Partial \Lambda)_i/ (\nu_\mathbf{W} - p + 1)} \sim F_{\nu_\mathbf{B}, \nu_\mathbf{W} - p + 1}.
+    \end{align*}
+    Далее жадным образом отбираем признаки.
+  \end{itemize}
+\end{frame}
+\begin{frame}
+  \frametitle{Логистическая регрессия}
+  \framesubtitle{Постановка задачи}
+  Задача: по выборке построить функцию классификации $a(\boldsymbol{\xi})$, на которой достигается минимум среднего риска
+  \begin{align*}
+    R(a) = \mathds{E}_{\boldsymbol{\xi}} \sum_{k = 1}^{K} \mathbf{L}(G_k, a(\boldsymbol{\xi})) P(G_k \mid \boldsymbol{\xi}) \rightarrow \min_a.
+  \end{align*}
+ Выше был получен оптимальный байесовский классификатор, на котором достигается минимум $R(a)$:
+  \begin{align*}
+    a(\mathbf{x}) = \argmax_{G \in \mathcal{G}} P(G \mid \boldsymbol{\xi}).
+  \end{align*}
+Далее рассмотрим логистическую регрессию как метод оценки апостериорных вероятностей $P(G \mid \boldsymbol{\xi})$.
+\end{frame}
+\begin{frame}
+  \frametitle{Логистическая регрессия}
+  \framesubtitle{Модель}
+ Модель задается системой
+  \begin{align*}
+    \log\frac{P(\eta = G_i \mid \boldsymbol{\xi} = \mathbf{x})}{P(\eta = G_K \mid \boldsymbol{\xi} = \mathbf{x})} = \beta_{i0} + \beta_{i}^\mathrm{T}\mathbf{x}, \quad i = 1,\ldots, K - 1.
+  \end{align*}
+  То есть границы между классами линейны.
+
+Перейдем от логитов к вероятностям, их сумма будет равна единице
+  \begin{align*}
+    P(\eta = G_i \mid \boldsymbol{\xi} = \mathbf{x}) &= \frac{e^{\beta_{i0} + \beta^\mathrm{T}_i \mathbf{x}}}{1 + \sum_{k = 1}^{K - 1}e^{\beta_{k0} + \beta^\mathrm{T}_k \mathbf{x}}}, \quad i = 1,\ldots, K - 1,\\
+    P(\eta = G_K \mid \boldsymbol{\xi} = \mathbf{x}) &= \frac{1}{1 + \sum_{k = 1}^{K - 1}e^{\beta_{k0} + \beta^\mathrm{T}_k \mathbf{x}}}.
+  \end{align*}
+\end{frame}
+\begin{frame}
+  \frametitle{Логистическая регрессия}
+  \framesubtitle{Метод максимального правдоподобия}
+  Воспользуемся ММП для оценки параметров условного распределения. Логарифм функции правдоподобия
+  \begin{align*}
+    \ell(\theta) = \sum_{i = 1}^{N} \log P(\eta = G_k \mid \boldsymbol{\xi} = \mathbf{x}_i; \theta), \quad \theta = (\beta_{10}, \beta_{1}^\mathrm{T},\ldots,\beta_{(K-1)0}, \beta_{K - 1}^\mathrm{T}).
+  \end{align*}
+
+  Cлучай двух классов $\mathcal{G} = \{0, 1\}$. Тогда
+  \begin{align*}
+    \ell(\beta) = \sum_{i = 1}^{N}(y_i\beta^\mathrm{T}\mathbf{x}_i - \log(1 + e^{\beta^\mathrm{T}\mathbf{x}_i})), \quad \beta = \{\beta_{10}, \beta_1\}.
+  \end{align*}
+
+Обозначим $p(\mathbf{x}, \theta) = P(\eta = 0 \mid \boldsymbol{\xi} = \mathbf{x}; \theta)$ и $1 - p(\mathbf{x}, \theta) = P(\eta = 1 \mid \boldsymbol{\xi} = \mathbf{x}; \theta)$. Приравниваем производные к нулю, получаем систему из $p + 1$ уравнения
+  \begin{align*}
+    \frac{\partial \ell(\beta)}{\partial \beta} = \sum_{i = 1}^N \mathbf{x}_i (y_i - p(x_i; \beta)) = 0.
+  \end{align*}
+\end{frame}
+\begin{frame}
+  \frametitle{Задача классификации}
+  \framesubtitle{Минимизация аппроксимированного эмпирического риска}
+  На языке ML рассмотрим задачу классификации, $Y = \{-1, +1\}$. Введем некотороые понятия:
+  \begin{itemize}
+    \item $a(x, \beta) = \mathrm{sign}~f(x, \beta)$ -- семейство классификаторов;
+    \item $M_i(\beta) = y_i f(x_i, \beta)$ -- отступ объекта $x_i$;
+    \item $\mathcal{L}(M_i(\beta))$ -- монотонно невозрастающая функция потерь, мажорирующая $[M < 0]$.
+  \end{itemize}
+  \bigskip
+Задача поиска классификатора $a(x, \beta)$ сводится к задаче
+  \begin{align*}
+    Q(\beta, \mathbf{X}) = \sum_{i = 1}^N [M_i(\beta) < 0] \leq \sum_{i = 1}^N \mathcal{L}(M_i(\beta)) \rightarrow \min_\beta.
+  \end{align*}
+  Положив $\mathcal{L}(M_i(\theta)) = -\log P(x_i, y_i; \theta)$ получаем эквивалентность с задачей максимизации правдоподобия.
+\end{frame}
+\begin{frame}
+  \frametitle{Логистическая регрессия}
+  \framesubtitle{Минимизация аппроксимированного эмпирического риска}
+В логистической регрессии минимизируется аппроксимация:
+  \begin{align*}
+     Q(\beta) = \sum_{i = 1}^N \log(1 + e^{-y_i\beta^\mathrm{T}x_i}) \rightarrow \min_\beta,
+  \end{align*}
+то есть функция потерь имеет вид $\mathcal{L}(M_i(\theta)) = \log(1 + e^{-y_i\beta^\mathrm{T}x_i})$.
+
+\begin{figure}
+  \includegraphics[width=0.3\linewidth]{logloss.pdf}
+  \caption{Логистическая функция потерь}
+\end{figure}
+\end{frame}
+\begin{frame}
+  \frametitle{Логистическая регрессия}
+  \framesubtitle{Метод Ньютона-Рафсона}
+Используем метод Ньютона-Рафсона для решения системы
+  \begin{align*}
+    \frac{\partial \ell(\beta)}{\partial \beta} = \sum_{i = 1}^N \mathbf{x}_i (y_i - p(\mathbf{x}_i; \beta)) = 0.
+  \end{align*}
+Гессиан логарифма правдоподобия
+  \begin{align*}
+    \frac{\partial^2 \ell(\beta)}{\partial \beta \partial \beta^{\mathrm{T}}} = -\sum_{i = 1}^N x_ix_i^\mathrm{T} p(\mathbf{x}_i; \beta)(1 - p(\mathbf{x}_i; \beta)) = 0.
+  \end{align*}
+$\beta^{old}$ -- начальное приближение $\beta$, итерация алгоритма:
+  \begin{align*}
+    \beta^{new} = \beta^{old} - \left(\frac{\partial^2 \ell(\beta)}{\partial \beta \partial \beta^{\mathrm{T}}}\right)^{-1}\frac{\partial \ell(\beta)}{\partial \beta},
+  \end{align*}
+  где производные вычисляются в точке $\beta^{old}$.
+\end{frame}
+\begin{frame}
+  \frametitle{Логистическая регрессия}
+  \framesubtitle{Итерация алгоритма Н-Р как IRLS}
+Пусть $\mathbf{y}$ -- ответы $y_i$, $\mathbf{X}$ -- матрица данных, $\mathbf{p} = (p(\mathbf{x}_i; \beta^{old}))$, $\mathbf{W} = diag\{w_1, \ldots, w_n\}$, где $w_{i} = p(\mathbf{x}_i;\beta^{old})(1 - p(\mathbf{x}_i; \beta^{old}))$. Тогда
+  \begin{align*}
+      \frac{\partial \ell(\beta)}{\partial \beta} = \mathbf{X}^\mathrm{T}(\mathbf{y} - \mathbf{p}), \quad
+      \frac{\partial^2 \ell(\beta)}{\partial \beta \partial \beta^{\mathrm{T}}} = -\mathbf{X}^\mathrm{T}\mathbf{W}\mathbf{X}.
+  \end{align*}
+  Перепишем шаг алгоритма Ньютона-Рафсона
+  \begin{align*}
+    \beta^{new} = \beta^{old} + (\mathbf{X}^\mathrm{T}\mathbf{W}\mathbf{X})^{-1}\mathbf{X}^\mathrm{T}(\mathbf{y} - \mathbf{p})
+    = (\mathbf{X}^\mathrm{T}\mathbf{W}\mathbf{X})^{-1}\mathbf{X}^\mathrm{T}\mathbf{W}\mathbf{z}.
+  \end{align*}
+Получили взвешенную регрессию, где в качестве ответа выступает
+  \begin{align*}
+    \mathbf{z} = \mathbf{X}\beta^{old} + \mathbf{W}^{-1}(\mathbf{y} - \mathbf{p}).
+  \end{align*}
+ Получили IRLS, на каждом шаге решается задача
+  \begin{align*}
+    \beta^{new} = \argmin_\beta (\mathbf{z} - \mathbf{X}\beta)^\mathrm{T} \mathbf{W}(\mathbf{z} - \mathbf{X}\beta).
+  \end{align*}
+
+  В качестве $\beta^{old}$ можно взять оценки линейной регрессии или $\beta^{old} = 0$.
+\end{frame}
+\begin{frame}
+  \frametitle{Логистическая регрессия}
+  \framesubtitle{Регуляризация}
+  LASSO:
+  \begin{align*}
+    \max_{\beta_0, \beta} \sum\limits_{i = 1}^N \left( y_i(\beta_0 + \beta^\mathrm{T}\mathbf{x}_i) - \log (1 + e^{\beta_0 + \beta^\mathrm{T}\mathbf{x_i}})\right) - \lambda \sum\limits_{j = 1}^p |\beta_j|.
+  \end{align*}
+
+Ridge Regression:
+\begin{align*}
+  \max_{\beta_0, \beta} \sum\limits_{i = 1}^N \left( y_i(\beta_0 + \beta^\mathrm{T}\mathbf{x}_i) - \log (1 + e^{\beta_0 + \beta^\mathrm{T}\mathbf{x_i}})\right) - \lambda \sum\limits_{j = 1}^p \beta_j^2.
+\end{align*}
+
+  Для этого можно снова использовать алгоритм Ньютона-Рафсона, $\lambda$ выбирается с помощью скользящего контроля.
+\end{frame}
+\begin{frame}
+  \frametitle{LR vs. LDA}
+  Посмотрим на log-posterior odds между классами $i$ и $K$ в случае LDA:
+  \begin{multline*}
+    \log \frac{P(\eta = G_i \mid \boldsymbol{\xi} = \mathbf{x})}{P(\eta = G_K \mid \boldsymbol{\xi} = \mathbf{x})} = \\ = -\frac{1}{2} (\mu_i - \mu_K)^\mathrm{T} \Sigma^{-1}(\mu_i + \mu_K) + (\mu_i - \mu_K)^\mathrm{T} \Sigma^{-1}x + \log(\pi_i/\pi_K) = \\
+    = \alpha_{i0} + \alpha_i^\mathrm{T}\mathbf{x}.
+  \end{multline*}
+  С другой стороны, линейная логистическая регрессия имеет линейные логиты по построению
+  \begin{align*}
+    \log \frac{P(\eta = G_i \mid \boldsymbol{\xi} = \mathbf{x})}{P(\eta = G_K \mid \boldsymbol{\xi} = \mathbf{x})} = \beta_{i0} + \beta_i^\mathrm{T}\mathbf{x}.
+  \end{align*}
+  Модели выглядят очень похоже. Различие заключается в том как оцениваются линейные коэффициенты.
+\end{frame}
+\begin{frame}
+  \frametitle{LR vs. LDA}
+  Выпишем совместную плотность $\boldsymbol{\xi}$ и $\eta$
+  \begin{align*}
+    P(\boldsymbol{\xi} = \mathbf{x}, \eta = G_i) = P(\mathbf{x})P(\eta = G_i \mid \boldsymbol{\xi} = \mathbf{x}).
+  \end{align*}
+  И в линейном дискриминантном анализе, и в логистической регрессии второй множитель выражается как
+  \begin{align*}
+    P(\eta = G_i \mid \boldsymbol{\xi} = \mathbf{x}) = \frac{e^{\beta_{i0} + \beta^\mathrm{T}_i \mathbf{x}}}{1 + \sum_{k = 1}^{K - 1}e^{\beta_{k0} + \beta^\mathrm{T}_k \mathbf{x}}}.
+  \end{align*}
+  В логистической регрессии $P(\mathbf{x})$ -- произвольная плотность, а параметры $P(\eta = G_i \mid \boldsymbol{\xi} = \mathbf{x})$ оцениваются максимизацией условного правдоподобия (discriminative learning). Решается задача
+  \begin{align*}
+    \ell(\theta) = \sum_{i = 1}^{N} \log P(\eta = G_k \mid \boldsymbol{\xi} = \mathbf{x}_i; \theta) \rightarrow \max_\theta.
+  \end{align*}
+\end{frame}
+\begin{frame}
+  \frametitle{LR vs. LDA}
+  В LDA максимизируется полноценный логарифм функции правдоподобия совместной плотности
+  \begin{align*}
+    P(\mathbf{x} , \eta = G_i) =  \phi(\mathbf{x}; \mu_i, \Sigma)\pi_i,
+  \end{align*}
+  где $\phi(\mathbf{x}; \mu_i, \Sigma)$ - плотность нормального распределения (generative learning).
+
+  Решается задача
+  \begin{align*}
+    \ell(\mu_i, \Sigma) = \sum_{i = 1}^{N} \phi(\mathbf{x}_i; \mu_i, \Sigma)\pi_i \rightarrow \max_{\mu_i, \Sigma}.
+  \end{align*}
+  При этом $P(\mathbf{x})$ -- это смесь распределений
+  \begin{align*}
+    P(\mathbf{x}) =  \sum_{i = 1}^K \phi(\mathbf{x}; \mu_i, \Sigma)\pi_i.
+  \end{align*}
+\end{frame}
+\begin{frame}
+    \frametitle{LR vs. LDA}
+    Некоторые плюсы и минусы методов:
+    \begin{itemize}
+      \item Предположение о нормальности распределения дает нам больше информации о параметрах, отсюда меньше дисперсия оценок;
+      \item Точки, далекие от разделяющей плоскости (у которых в логистической регрессии вес будет меньше), влияют на оценку ковариационной матрицы. LDA не является робастным по отношению к выбросам;
+      \item  В логистической регрессии более гибкая модель;
+      \item  В логистической регрессии требуется оценка меньшего числа параметров;
+      \item  Алгоритм Ньютона-Рафсона требует обращения матрицы на каждом шаге.
+    \end{itemize}
+\end{frame}
+\begin{frame}
+  \frametitle{Непараметрическая классификация}
+  \framesubtitle{Непараметрическая оценка плотности}
+  Локальная непараметрическая оценка Парзена-Розенблата
+  \begin{align*}
+     \widehat{p}_h(\mathbf{z}) = \frac{1}{N}\sum_{i = 1}^N \prod_{j = 1}^p \frac{1}{h_j}K \left(\frac{z_j - x_{ij}}{h_j}\right),
+  \end{align*}
+где
+\begin{itemize}
+  \item $K(x)$ -- ядро, четная и нормированная функция $\int K(x) dx = 1$;
+  \item $h > 0$ -- ширина окна, выбирается с помощью скользящего контроля (LOO).
+\end{itemize}
+\bigskip
+Если
+\begin{itemize}
+  \item $K(x)$ -- непрерывно, $\int K(x)^2 dx < \infty$,
+  \item последовательность $h_N$ такая, что $\lim\limits_{N \rightarrow \infty}h_N = 0$, $\lim\limits_{N \rightarrow \infty} Nh_N = \infty$,
+\end{itemize}
+тогда $\widehat{p}_{h_m}(\mathbf{z}) \rightarrow p(x)$ п.в. при $N \rightarrow \infty$.
+\end{frame}
+\begin{frame}
+  \frametitle{Непараметрическая классификация}
+  \framesubtitle{Непараметрическая оценка плотности}
+Выбор ядра не влияет на качество оценки, но определяет гладкость функции $\widehat{p}_{h}$ и влияет на эффективность вычислений.
+\bigskip
+\begin{columns}
+\begin{column}{0.5\textwidth}
+   \includegraphics[width=\textwidth]{kernels.pdf}
+\end{column}
+\begin{column}{0.5\textwidth}  %%<--- here
+\begin{itemize}
+  \item Е -- Епанечикова
+  \item Q -- Квартическое
+  \item Т -- Треугольное
+  \item G -- Гауссовское
+  \item П -- Прямоугольное
+\end{itemize}
+\end{column}
+\end{columns}
+\end{frame}
+\end{document}
